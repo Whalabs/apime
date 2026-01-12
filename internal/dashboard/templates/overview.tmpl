@@ -1,0 +1,43 @@
+{{define "overview_content"}}
+  <h1>Visão geral</h1>
+  <section class="grid">
+    <div class="card">
+      <h3>Instâncias</h3>
+      <strong>{{index .Data "InstancesTotal"}}</strong>
+      <small>Ativas: {{index .Data "InstancesActive"}} · Pendentes: {{index .Data "InstancesPending"}}</small>
+    </div>
+    <div class="card">
+      <h3>Webhooks</h3>
+      <strong>{{index .Data "WebhooksTotal"}}</strong>
+    </div>
+    <div class="card">
+      <h3>Usuários</h3>
+      <strong>{{index .Data "UsersTotal"}}</strong>
+    </div>
+  </section>
+
+  <h2 style="margin-top:2rem;">Instâncias recentes</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>Status</th>
+        <th>Webhook</th>
+        <th>Criada em</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range index .Data "RecentInstances"}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td><span class="status-badge {{statusBadge .Status}}">{{.Status}}</span></td>
+        <td>{{if .WebhookID}}{{.WebhookID}}{{else}}—{{end}}</td>
+        <td>{{formatTime .CreatedAt}}</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="4">Nenhuma instância cadastrada ainda.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+{{end}}
+

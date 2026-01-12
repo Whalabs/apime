@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS audit_trail;
+DROP TABLE IF EXISTS message_queue;
+DROP TABLE IF EXISTS event_logs;
+DROP TABLE IF EXISTS instances;
+DROP TABLE IF EXISTS webhooks;
+DROP TABLE IF EXISTS users;
+

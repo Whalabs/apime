@@ -1,0 +1,916 @@
+{{define "instances_content"}}
+<style>
+  .instances-container {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .instances-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .instances-header h1 {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.8rem;
+    margin: 0;
+    color: var(--text);
+  }
+
+  .instances-header-icon {
+    width: 28px;
+    height: 28px;
+    stroke-width: 1.5;
+  }
+
+  .btn-create {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.25);
+  }
+
+  .btn-create:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 15px -3px rgba(37, 99, 235, 0.35);
+  }
+
+  .btn-create svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+  }
+
+  /* Tabela */
+  .instances-table-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+
+  .instances-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+  }
+
+  .instances-table thead {
+    background: rgba(15, 23, 42, 0.04);
+  }
+
+  [data-theme="dark"] .instances-table thead {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .instances-table th {
+    padding: 1rem 1rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  .instances-table td {
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+
+  .instances-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .instances-table tbody tr:hover {
+    background: rgba(37, 99, 235, 0.04);
+  }
+
+  [data-theme="dark"] .instances-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .instance-id {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .instance-id code {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-family: monospace;
+  }
+
+  .instance-name {
+    font-weight: 500;
+  }
+
+  .owner-email {
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  /* Status Badges */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .status-active {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+
+  .status-pending, .status-disconnected {
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--muted);
+  }
+
+  .status-error {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+
+  /* Botões de Ação */
+  .action-buttons {
+    display: flex;
+    gap: 0.4rem;
+    justify-content: flex-end;
+  }
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(148, 163, 184, 0.08);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+  }
+
+  .action-btn:hover {
+    background: rgba(37, 99, 235, 0.1);
+    border-color: rgba(37, 99, 235, 0.3);
+    color: var(--primary);
+  }
+
+  .action-btn.primary {
+    background: rgba(37, 99, 235, 0.1);
+    border-color: rgba(37, 99, 235, 0.2);
+    color: var(--primary);
+  }
+
+  .action-btn.primary:hover {
+    background: rgba(37, 99, 235, 0.2);
+  }
+
+  .action-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+  }
+
+  .action-btn.warning:hover {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.3);
+    color: #f59e0b;
+  }
+
+  .action-btn svg {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px;
+    min-height: 18px;
+    stroke-width: 1.5;
+    flex-shrink: 0;
+  }
+
+  .copy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border);
+    background: rgba(148, 163, 184, 0.08);
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+  }
+
+  .copy-btn:hover {
+    background: rgba(37, 99, 235, 0.1);
+    border-color: rgba(37, 99, 235, 0.3);
+    color: var(--primary);
+  }
+
+  .copy-btn svg {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px;
+    min-height: 18px;
+    stroke-width: 1.5;
+    flex-shrink: 0;
+  }
+
+  /* Tooltips */
+  [data-tooltip] {
+    position: relative;
+  }
+
+  [data-tooltip]::before,
+  [data-tooltip]::after {
+    position: absolute;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  [data-tooltip]::before {
+    content: attr(data-tooltip);
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    white-space: nowrap;
+    border-radius: 6px;
+    background: #1e293b;
+    color: #f1f5f9;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  [data-tooltip]::after {
+    content: '';
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #1e293b;
+  }
+
+  [data-tooltip]:hover::before,
+  [data-tooltip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 100;
+    padding: 1rem;
+  }
+
+  .modal-overlay.active {
+    display: flex;
+  }
+
+  .modal-content {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: min(520px, 100%);
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  [data-theme="dark"] .modal-content {
+    background: #1e293b;
+  }
+
+  [data-theme="light"] .modal-content {
+    background: #ffffff;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .modal-header h3 svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 1.5;
+  }
+
+  .modal-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: rgba(148, 163, 184, 0.15);
+    border-radius: 10px;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .modal-close:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+
+  .modal-close svg {
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px;
+    min-height: 26px;
+    stroke-width: 2;
+    flex-shrink: 0;
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+  }
+
+  .modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-group label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .form-group input {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    color: var(--text);
+    transition: all 0.2s ease;
+    height: 48px;
+    box-sizing: border-box;
+  }
+
+  [data-theme="dark"] .form-group input {
+    background: #0f172a;
+  }
+
+  [data-theme="light"] .form-group input {
+    background: #ffffff;
+    border-color: #e2e8f0;
+  }
+
+  .form-group input:focus {
+    outline: none;
+    border-color: rgba(37, 99, 235, 0.6);
+    box-shadow: 0 0 0 4px var(--focus);
+  }
+
+  .form-group small {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn-cancel {
+    padding: 0.65rem 1.25rem;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-cancel:hover {
+    background: rgba(148, 163, 184, 0.2);
+  }
+
+  .btn-submit {
+    padding: 0.65rem 1.25rem;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-submit:hover {
+    opacity: 0.9;
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    color: var(--muted);
+  }
+
+  /* Token Banner */
+  .token-banner {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .token-banner-icon {
+    width: 24px;
+    height: 24px;
+    color: #22c55e;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .token-banner-content {
+    flex: 1;
+  }
+
+  .token-banner-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text);
+    margin: 0 0 0.75rem 0;
+  }
+
+  .token-value-container {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+  }
+
+  [data-theme="dark"] .token-value-container {
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  .token-value {
+    flex: 1;
+    font-family: monospace;
+    font-size: 0.9rem;
+    word-break: break-all;
+    color: var(--text);
+  }
+
+  .token-copy-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(34, 197, 94, 0.15);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 6px;
+    color: #22c55e;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .token-copy-btn:hover {
+    background: rgba(34, 197, 94, 0.25);
+  }
+
+  .token-copy-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .token-warning {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0;
+  }
+</style>
+
+<div class="instances-container">
+  <div class="instances-header">
+    <h1>
+      <svg class="instances-header-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 4m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" />
+        <path d="M3 12m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" />
+        <path d="M3 20m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" />
+        <path d="M7 8v4" />
+        <path d="M7 16v4" />
+      </svg>
+      Instâncias
+    </h1>
+    <button type="button" class="btn-create" id="openCreateInstance">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 5l0 14" />
+        <path d="M5 12l14 0" />
+      </svg>
+      Criar Instância
+    </button>
+  </div>
+
+  {{if index .Data "NewInstanceToken"}}
+  <div class="token-banner">
+    <svg class="token-banner-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" />
+      <path d="m8.5 12.5 2.2 2.2 4.8-5.2" />
+    </svg>
+    <div class="token-banner-content">
+      <h3 class="token-banner-title">Token da Instância Gerado</h3>
+      <div class="token-value-container">
+        <code class="token-value">{{index .Data "NewInstanceToken"}}</code>
+        <button type="button" class="token-copy-btn" data-copy="{{index .Data "NewInstanceToken"}}">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Copiar Token
+        </button>
+      </div>
+      <p class="token-warning">⚠️ Copie este valor agora. Ele não será exibido novamente.</p>
+    </div>
+  </div>
+  {{end}}
+
+  <div class="instances-table-container">
+    <table class="instances-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nome</th>
+          {{if eq .UserRole "admin"}}<th>Owner</th>{{end}}
+          <th>Status</th>
+          <th>Criado em</th>
+          <th style="text-align: right;">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range $inst := index .Data "Instances"}}
+        <tr>
+          <td>
+            <div class="instance-id">
+              <code>{{$inst.ID}}</code>
+              <button type="button" class="copy-btn" data-copy="{{$inst.ID}}" data-tooltip="Copiar ID">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </td>
+          <td class="instance-name">{{$inst.Name}}</td>
+          {{if eq $.UserRole "admin"}}
+          <td class="owner-email">{{$inst.OwnerEmail}}</td>
+          {{end}}
+          <td><span class="status-badge {{statusBadge $inst.Status}}">{{$inst.Status}}</span></td>
+          <td>{{formatTime $inst.CreatedAt}}</td>
+          <td>
+            <div class="action-buttons">
+              <button type="button" class="action-btn edit-instance-btn" data-tooltip="Editar" data-id="{{$inst.ID}}" data-name="{{$inst.Name}}" data-webhook-url="{{$inst.WebhookURL}}" data-webhook-secret="{{$inst.WebhookSecret}}">
+                <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+                  <path d="M13.5 6.5l4 4" />
+                </svg>
+              </button>
+              <form method="post" action="/dashboard/instances/{{$inst.ID}}/token" style="margin:0;" class="generate-token-form">
+                <button type="submit" class="action-btn" data-tooltip="Gerar Token">
+                  <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16.555 3.843l3.602 3.602a2.877 2.877 0 0 1 0 4.069l-2.643 2.643a2.877 2.877 0 0 1 -4.069 0l-3.602 -3.602a2.877 2.877 0 0 1 0 -4.069l2.643 -2.643a2.877 2.877 0 0 1 4.069 0z" />
+                    <path d="M14.5 7.5l2 2" />
+                    <path d="M3 21l3.5 -3.5" />
+                    <path d="M6.5 17.5l-3 -3" />
+                  </svg>
+                </button>
+              </form>
+              {{if ne $inst.Status "active"}}
+              <a href="/dashboard/instances/{{$inst.ID}}/qr" style="text-decoration:none;">
+                <button type="button" class="action-btn primary" data-tooltip="QR Code">
+                  <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" />
+                    <path d="M7 17l0 .01" />
+                    <path d="M14 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" />
+                    <path d="M7 7l0 .01" />
+                    <path d="M4 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" />
+                    <path d="M17 7l0 .01" />
+                    <path d="M14 14l3 0" />
+                    <path d="M20 14l0 .01" />
+                    <path d="M14 14l0 3" />
+                    <path d="M14 20l3 0" />
+                    <path d="M17 17l3 0" />
+                    <path d="M20 17l0 3" />
+                  </svg>
+                </button>
+              </a>
+              {{end}}
+              <a href="/dashboard/instances/{{$inst.ID}}/diagnostics" style="text-decoration:none;">
+                <button type="button" class="action-btn" data-tooltip="Diagnóstico">
+                  <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 12h4l3 8l4 -16l3 8h4" />
+                  </svg>
+                </button>
+              </a>
+              {{if eq $inst.Status "active"}}
+              <form method="post" action="/dashboard/instances/{{$inst.ID}}/disconnect" style="margin:0;" class="disconnect-instance-form" data-instance-name="{{$inst.Name}}">
+                <button type="submit" class="action-btn warning" data-tooltip="Desconectar">
+                  <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 16l-4 4" />
+                    <path d="M7 12l5 5l-1.5 1.5a3.536 3.536 0 1 1 -5 -5l1.5 -1.5z" />
+                    <path d="M17 12l-5 -5l1.5 -1.5a3.536 3.536 0 1 1 5 5l-1.5 1.5z" />
+                    <path d="M3 21l2.5 -2.5" />
+                    <path d="M18.5 5.5l2.5 -2.5" />
+                    <path d="M10 11l-2 2" />
+                    <path d="M13 14l-2 2" />
+                  </svg>
+                </button>
+              </form>
+              {{else}}
+              <form method="post" action="/dashboard/instances/{{$inst.ID}}/delete" style="margin:0;" class="delete-instance-form" data-instance-name="{{$inst.Name}}">
+                <button type="submit" class="action-btn danger" data-tooltip="Remover">
+                  <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 7l16 0" />
+                    <path d="M10 11l0 6" />
+                    <path d="M14 11l0 6" />
+                    <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" />
+                    <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" />
+                  </svg>
+                </button>
+              </form>
+              {{end}}
+            </div>
+          </td>
+        </tr>
+        {{else}}
+        <tr>
+          <td colspan="{{if eq .UserRole "admin"}}6{{else}}5{{end}}" class="empty-state">Nenhuma instância cadastrada.</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Criar/Editar Instância -->
+<div class="modal-overlay" id="instanceModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="instanceModalTitle">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 4m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" />
+          <path d="M3 12m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" />
+          <path d="M3 20m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" />
+        </svg>
+        <span id="instanceModalTitleText">Criar Instância</span>
+      </h3>
+      <button type="button" class="modal-close" id="closeInstanceModal">
+        <svg width="26" height="26" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6l-12 12" />
+          <path d="M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <form method="post" id="instanceModalForm" action="/dashboard/instances">
+      <div class="modal-body">
+        <div class="modal-form">
+          <div class="form-group">
+            <label for="modal-instance-name">Nome da Instância</label>
+            <input type="text" id="modal-instance-name" name="name" placeholder="Ex: Atendimento 01" required>
+            <small>Um nome descritivo para identificar esta instância.</small>
+          </div>
+          <div class="form-group">
+            <label for="modal-webhook-url">Webhook URL</label>
+            <input type="url" id="modal-webhook-url" name="webhook_url" placeholder="https://seu-servidor.com/webhook">
+            <small>URL que receberá os eventos desta instância.</small>
+          </div>
+          <div class="form-group">
+            <label for="modal-webhook-secret">Webhook Secret</label>
+            <input type="text" id="modal-webhook-secret" name="webhook_secret" placeholder="Opcional">
+            <small>Chave secreta para validar requisições do webhook.</small>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" id="cancelInstanceModal">Cancelar</button>
+        <button type="submit" class="btn-submit" id="instanceModalSubmit">Criar Instância</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Copiar para clipboard
+  const copyButtons = document.querySelectorAll('.copy-btn, .token-copy-btn');
+  copyButtons.forEach(btn => {
+    btn.addEventListener('click', function() {
+      const textToCopy = this.getAttribute('data-copy');
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        const originalHTML = this.innerHTML;
+        this.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        this.style.color = '#22c55e';
+        // Mostrar toast de confirmação
+        if (typeof window.createToast === 'function') {
+          window.createToast('success', 'Copiado para a área de transferência!', 2000);
+        }
+        setTimeout(() => {
+          this.innerHTML = originalHTML;
+          this.style.color = '';
+        }, 2000);
+      }).catch(err => {
+        console.error('Erro ao copiar:', err);
+        if (typeof window.createToast === 'function') {
+          window.createToast('error', 'Erro ao copiar', 2000);
+        }
+      });
+    });
+  });
+
+  // Modal
+  const modal = document.getElementById('instanceModal');
+  const modalTitleText = document.getElementById('instanceModalTitleText');
+  const modalForm = document.getElementById('instanceModalForm');
+  const modalSubmit = document.getElementById('instanceModalSubmit');
+  const openCreate = document.getElementById('openCreateInstance');
+  const closeModal = document.getElementById('closeInstanceModal');
+  const cancelModal = document.getElementById('cancelInstanceModal');
+
+  function openModal() {
+    if (modal) modal.classList.add('active');
+  }
+
+  function closeModalFn() {
+    if (modal) modal.classList.remove('active');
+  }
+
+  function openCreateModal() {
+    modalTitleText.textContent = 'Criar Instância';
+    modalForm.setAttribute('action', '/dashboard/instances');
+    modalSubmit.textContent = 'Criar Instância';
+    document.getElementById('modal-instance-name').value = '';
+    document.getElementById('modal-webhook-url').value = '';
+    document.getElementById('modal-webhook-secret').value = '';
+    openModal();
+    document.getElementById('modal-instance-name').focus();
+  }
+
+  function openEditModal(btn) {
+    const id = btn.getAttribute('data-id');
+    modalTitleText.textContent = 'Editar Instância';
+    modalForm.setAttribute('action', `/dashboard/instances/${id}/update`);
+    modalSubmit.textContent = 'Salvar Alterações';
+    document.getElementById('modal-instance-name').value = btn.getAttribute('data-name') || '';
+    document.getElementById('modal-webhook-url').value = btn.getAttribute('data-webhook-url') || '';
+    document.getElementById('modal-webhook-secret').value = btn.getAttribute('data-webhook-secret') || '';
+    openModal();
+    document.getElementById('modal-instance-name').focus();
+  }
+
+  if (openCreate) {
+    openCreate.addEventListener('click', openCreateModal);
+  }
+  if (closeModal) {
+    closeModal.addEventListener('click', closeModalFn);
+  }
+  if (cancelModal) {
+    cancelModal.addEventListener('click', closeModalFn);
+  }
+  if (modal) {
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) closeModalFn();
+    });
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModalFn();
+  });
+
+  const editButtons = document.querySelectorAll('.edit-instance-btn');
+  editButtons.forEach(btn => {
+    btn.addEventListener('click', function() {
+      openEditModal(this);
+    });
+  });
+
+  // Handlers para modal de confirmação customizado
+  // Gerar token
+  const generateTokenForms = document.querySelectorAll('.generate-token-form');
+  generateTokenForms.forEach(form => {
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const confirmed = await customConfirm(
+        'Gerar um novo token? O token anterior será revogado e se tornará inválido.',
+        'Gerar Token de Instância',
+        { danger: true, confirmText: 'Gerar Token' }
+      );
+      if (confirmed) {
+        this.submit();
+      }
+    });
+  });
+
+  // Remover instância
+  const deleteInstanceForms = document.querySelectorAll('.delete-instance-form');
+  deleteInstanceForms.forEach(form => {
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const name = this.getAttribute('data-instance-name') || 'esta instância';
+      const confirmed = await customConfirm(
+        `Tem certeza que deseja remover a instância "${name}"?`,
+        'Remover instância',
+        { danger: true, confirmText: 'Remover' }
+      );
+      if (confirmed) {
+        this.submit();
+      }
+    });
+  });
+
+  // Desconectar instância
+  const disconnectInstanceForms = document.querySelectorAll('.disconnect-instance-form');
+  disconnectInstanceForms.forEach(form => {
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const name = this.getAttribute('data-instance-name') || 'esta instância';
+      const confirmed = await customConfirm(
+        `Tem certeza que deseja desconectar a instância "${name}"?`,
+        'Desconectar Instância',
+        { danger: true, confirmText: 'Desconectar' }
+      );
+      if (confirmed) {
+        this.submit();
+      }
+    });
+  });
+});
+</script>
+{{end}}

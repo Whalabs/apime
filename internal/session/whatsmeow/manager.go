@@ -1,0 +1,1133 @@
+package whatsmeow
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+
+	_ "github.com/mattn/go-sqlite3" // Driver SQLite3
+	"go.mau.fi/whatsmeow"
+	waCompanionReg "go.mau.fi/whatsmeow/proto/waCompanionReg"
+	"go.mau.fi/whatsmeow/store"
+	"go.mau.fi/whatsmeow/store/sqlstore"
+	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
+	waLog "go.mau.fi/whatsmeow/util/log"
+	"go.uber.org/zap"
+
+	"github.com/open-apime/apime/internal/pkg/crypto"
+	"github.com/open-apime/apime/internal/storage"
+	"github.com/open-apime/apime/internal/storage/model"
+)
+
+// noopLogger implementa a interface de logger do WhatsMeow
+type noopLogger struct{}
+
+func (n *noopLogger) Debugf(msg string, args ...interface{}) {}
+func (n *noopLogger) Infof(msg string, args ...interface{})  {}
+func (n *noopLogger) Warnf(msg string, args ...interface{})  {}
+func (n *noopLogger) Errorf(msg string, args ...interface{}) {}
+func (n *noopLogger) Sub(module string) waLog.Logger         { return n }
+
+// Mutex para proteger modificações das variáveis globais do WhatsMeow
+var (
+	deviceConfigMu sync.Mutex
+)
+
+// EventHandler interface para processar eventos do WhatsMeow
+// Agora recebe o cliente para poder baixar mídia
+type EventHandler interface {
+	Handle(ctx context.Context, instanceID string, instanceJID string, client *whatsmeow.Client, evt any)
+}
+
+// Manager gerencia sessões WhatsMeow.
+type Manager struct {
+	clients          map[string]*whatsmeow.Client
+	currentQRs       map[string]string             // QR codes atuais por instância
+	qrContexts       map[string]context.CancelFunc // Contextos QR para cancelar
+	mu               sync.RWMutex
+	log              *zap.Logger
+	encKey           string
+	baseDir          string
+	deviceConfigRepo storage.DeviceConfigRepository
+	instanceRepo     storage.InstanceRepository             // Para atualizar status se restauração falhar
+	onStatusChange   func(instanceID string, status string) // Callback para atualizar status
+	eventHandler     EventHandler                           // Handler para eventos de webhook
+}
+
+// NewManager cria um novo gerenciador de sessões.
+func NewManager(log *zap.Logger, encKey, baseDir string, deviceConfigRepo storage.DeviceConfigRepository, instanceRepo storage.InstanceRepository) *Manager {
+	if baseDir == "" {
+		baseDir = "/app/sessions"
+		log.Warn("WHATSAPP_SESSION_DIR não definido, usando diretório padrão do container", zap.String("dir", baseDir))
+	} else {
+		log.Info("Usando diretório de sessões configurado", zap.String("dir", baseDir))
+	}
+	os.MkdirAll(baseDir, 0755)
+
+	return &Manager{
+		clients:          make(map[string]*whatsmeow.Client),
+		currentQRs:       make(map[string]string),
+		qrContexts:       make(map[string]context.CancelFunc),
+		log:              log,
+		encKey:           encKey,
+		baseDir:          baseDir,
+		deviceConfigRepo: deviceConfigRepo,
+		instanceRepo:     instanceRepo,
+	}
+}
+
+// SetStatusChangeCallback define callback para mudanças de status.
+func (m *Manager) SetStatusChangeCallback(fn func(instanceID string, status string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onStatusChange = fn
+}
+
+// SetEventHandler define o handler para eventos de webhook.
+func (m *Manager) SetEventHandler(handler EventHandler) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.eventHandler = handler
+	m.log.Info("event handler configurado para webhooks")
+}
+
+// CreateSession cria uma nova sessão e retorna o QR code.
+// Se forceRecreate for true, desconecta a sessão existente antes de criar uma nova.
+func (m *Manager) CreateSession(ctx context.Context, instanceID string) (string, error) {
+	return m.createSession(ctx, instanceID, false)
+}
+
+// createSession implementa a lógica de criação de sessão.
+func (m *Manager) createSession(ctx context.Context, instanceID string, forceRecreate bool) (string, error) {
+	m.mu.Lock()
+
+	if existingClient, exists := m.clients[instanceID]; exists {
+		if !forceRecreate {
+			m.mu.Unlock()
+			m.log.Warn("tentativa de criar sessão que já existe", zap.String("instance_id", instanceID))
+			return "", fmt.Errorf("sessão já existe para instância %s", instanceID)
+		}
+		// Desconectar sessão existente se forceRecreate for true
+		m.log.Info("desconectando sessão existente para recriar", zap.String("instance_id", instanceID))
+		existingClient.Disconnect()
+		delete(m.clients, instanceID)
+	}
+
+	m.mu.Unlock()
+
+	m.log.Info("criando nova sessão WhatsMeow", zap.String("instance_id", instanceID))
+
+	// Verificar se já existe arquivo SQLite com sessão válida antes de criar nova
+	dbPath := filepath.Join(m.baseDir, instanceID+".db")
+	if _, err := os.Stat(dbPath); err == nil {
+		// Arquivo existe - verificar se tem sessão válida
+		clientLog := &noopLogger{}
+		sqlitePath := fmt.Sprintf("file:%s?_foreign_keys=on", dbPath)
+		container, err := sqlstore.New(ctx, "sqlite3", sqlitePath, clientLog)
+		if err == nil {
+			deviceStore, err := container.GetFirstDevice(ctx)
+			if err == nil && deviceStore.ID != nil && !deviceStore.ID.IsEmpty() {
+				// Sessão válida existe - tentar restaurar ao invés de criar nova
+				m.log.Info("arquivo SQLite com sessão válida encontrado, tentando restaurar",
+					zap.String("instance_id", instanceID),
+				)
+				client, err := m.restoreSessionIfExists(ctx, instanceID)
+				if err == nil && client != nil && client.IsLoggedIn() {
+					return "", fmt.Errorf("instância já conectada, não é necessário QR code")
+				}
+				// Se restauração falhou, deletar arquivo e criar nova sessão
+				m.log.Warn("restauração falhou, deletando arquivo SQLite e criando nova sessão",
+					zap.String("instance_id", instanceID),
+				)
+				_ = os.Remove(dbPath)
+			}
+		}
+	}
+
+	clientLog := &noopLogger{}
+	sqlitePath := fmt.Sprintf("file:%s?_foreign_keys=on", dbPath)
+
+	m.log.Debug("criando store SQLite", zap.String("instance_id", instanceID), zap.String("db_path", sqlitePath))
+	container, err := sqlstore.New(ctx, "sqlite3", sqlitePath, clientLog)
+	if err != nil {
+		m.log.Error("erro ao criar store", zap.String("instance_id", instanceID), zap.Error(err))
+		return "", fmt.Errorf("whatsmeow: criar store: %w", err)
+	}
+
+	deviceStore, err := container.GetFirstDevice(ctx)
+	if err != nil {
+		m.log.Error("erro ao obter device store", zap.String("instance_id", instanceID), zap.Error(err))
+		return "", fmt.Errorf("whatsmeow: obter device: %w", err)
+	}
+
+	// Validar que o deviceStore não tem JID (não está logado)
+	// Se tiver JID, não deve criar nova sessão
+	if deviceStore.ID != nil && !deviceStore.ID.IsEmpty() {
+		m.log.Warn("deviceStore já tem JID, tentando restaurar ao invés de criar nova sessão",
+			zap.String("instance_id", instanceID),
+			zap.String("jid", deviceStore.ID.String()),
+		)
+		client, err := m.restoreSessionIfExists(ctx, instanceID)
+		if err == nil && client != nil && client.IsLoggedIn() {
+			return "", fmt.Errorf("instância já conectada, não é necessário QR code")
+		}
+		// Se restauração falhou, deletar arquivo e continuar com criação
+		m.log.Warn("restauração falhou, deletando arquivo SQLite e criando nova sessão",
+			zap.String("instance_id", instanceID),
+		)
+		_ = os.Remove(dbPath)
+		// Recriar container e deviceStore após deletar
+		container, err = sqlstore.New(ctx, "sqlite3", sqlitePath, clientLog)
+		if err != nil {
+			m.log.Error("erro ao recriar store após deletar", zap.String("instance_id", instanceID), zap.Error(err))
+			return "", fmt.Errorf("whatsmeow: recriar store: %w", err)
+		}
+		deviceStore, err = container.GetFirstDevice(ctx)
+		if err != nil {
+			m.log.Error("erro ao obter device store após recriar", zap.String("instance_id", instanceID), zap.Error(err))
+			return "", fmt.Errorf("whatsmeow: obter device: %w", err)
+		}
+	}
+
+	// Aplicar configurações de dispositivo ANTES de criar o client
+	if err := m.applyDeviceConfig(ctx, deviceStore); err != nil {
+		m.log.Warn("erro ao aplicar configurações de dispositivo", zap.String("instance_id", instanceID), zap.Error(err))
+		// Continuar mesmo com erro (usar valores padrão)
+	}
+
+	client := whatsmeow.NewClient(deviceStore, clientLog)
+
+	// Adicionar event handler para detectar conexão e desconexão
+	client.AddEventHandler(func(evt any) {
+		m.handleEvent(instanceID, evt)
+	})
+
+	// IMPORTANTE: GetQRChannel DEVE ser chamado ANTES de Connect()
+	// Criar contexto para o canal QR que não será cancelado
+	qrCtx, qrCancel := context.WithCancel(context.Background())
+	qrChan, err := client.GetQRChannel(qrCtx)
+	if err != nil {
+		qrCancel()
+		m.log.Error("erro ao obter canal QR", zap.String("instance_id", instanceID), zap.Error(err))
+		return "", fmt.Errorf("whatsmeow: obter canal QR: %w", err)
+	}
+
+	m.log.Debug("conectando cliente WhatsMeow", zap.String("instance_id", instanceID))
+	err = client.Connect()
+	if err != nil {
+		qrCancel()
+		m.log.Error("erro ao conectar cliente", zap.String("instance_id", instanceID), zap.Error(err))
+		return "", fmt.Errorf("whatsmeow: conectar: %w", err)
+	}
+
+	m.mu.Lock()
+	m.clients[instanceID] = client
+	// Armazenar o cancel do contexto QR para poder fechar depois
+	m.qrContexts[instanceID] = qrCancel
+	m.mu.Unlock()
+
+	// Iniciar goroutine para monitorar o canal QR em background
+	// O monitorQRChannel é o ÚNICO leitor do canal - isso evita race conditions
+	go m.monitorQRChannel(instanceID, qrChan, qrCancel)
+
+	m.log.Info("cliente conectado, aguardando QR code", zap.String("instance_id", instanceID))
+
+	// Aguardar o monitorQRChannel armazenar o primeiro QR code no map
+	// Não ler diretamente do canal para evitar race condition
+	maxWait := 30 * time.Second
+	checkInterval := 500 * time.Millisecond
+	startTime := time.Now()
+
+	for {
+		m.mu.RLock()
+		currentQR, hasQR := m.currentQRs[instanceID]
+		_, hasQRContext := m.qrContexts[instanceID]
+		m.mu.RUnlock()
+
+		if hasQR && currentQR != "" {
+			m.log.Info("QR code gerado com sucesso", zap.String("instance_id", instanceID))
+			return currentQR, nil
+		}
+
+		// Se não há mais contexto QR, o canal foi fechado
+		if !hasQRContext {
+			m.log.Warn("canal QR foi fechado antes de receber código", zap.String("instance_id", instanceID))
+			// Verificar uma última vez se há QR
+			m.mu.RLock()
+			currentQR, hasQR = m.currentQRs[instanceID]
+			m.mu.RUnlock()
+			if hasQR && currentQR != "" {
+				return currentQR, nil
+			}
+			return "", fmt.Errorf("whatsmeow: canal QR fechado antes de receber código")
+		}
+
+		// Verificar timeout
+		if time.Since(startTime) > maxWait {
+			m.log.Error("timeout ao aguardar primeiro QR code", zap.String("instance_id", instanceID))
+			// Verificar uma última vez
+			m.mu.RLock()
+			currentQR, hasQR = m.currentQRs[instanceID]
+			m.mu.RUnlock()
+			if hasQR && currentQR != "" {
+				return currentQR, nil
+			}
+			return "", fmt.Errorf("whatsmeow: timeout ao aguardar QR code")
+		}
+
+		// Aguardar um pouco antes de verificar novamente
+		time.Sleep(checkInterval)
+	}
+}
+
+// monitorQRChannel monitora o canal QR em background para receber novos QR codes e eventos
+// Este é o ÚNICO leitor do canal QR para evitar race conditions
+func (m *Manager) monitorQRChannel(instanceID string, qrChan <-chan whatsmeow.QRChannelItem, cancel context.CancelFunc) {
+	defer cancel()
+
+	for evt := range qrChan {
+		switch evt.Event {
+		case "code":
+			// Novo QR code disponível - atualizar o QR atual
+			if evt.Code != "" {
+				m.mu.Lock()
+				m.currentQRs[instanceID] = evt.Code
+				m.mu.Unlock()
+				m.log.Info("QR code recebido e armazenado", zap.String("instance_id", instanceID), zap.Duration("timeout", evt.Timeout))
+			} else {
+				m.log.Warn("QR code recebido mas vazio", zap.String("instance_id", instanceID))
+			}
+
+		case "success":
+			m.log.Info("pareamento concluído com sucesso", zap.String("instance_id", instanceID))
+			// Enviar presence após pareamento bem-sucedido
+			m.mu.RLock()
+			client, exists := m.clients[instanceID]
+			m.mu.RUnlock()
+			if exists && client != nil {
+				// Aguardar um pouco para garantir que está conectado
+				go func() {
+					time.Sleep(2 * time.Second)
+					if client.IsLoggedIn() {
+						if err := client.SendPresence(context.Background(), types.PresenceAvailable); err != nil {
+							m.log.Warn("erro ao enviar presence", zap.String("instance_id", instanceID), zap.Error(err))
+						} else {
+							m.log.Info("presence enviado com sucesso", zap.String("instance_id", instanceID))
+						}
+					}
+				}()
+			}
+			m.mu.Lock()
+			delete(m.currentQRs, instanceID)
+			delete(m.qrContexts, instanceID)
+			m.mu.Unlock()
+			return
+
+		case "timeout", "err-unexpected-state", "err-client-outdated", "err-scanned-without-multidevice":
+			m.log.Warn("canal QR fechado", zap.String("instance_id", instanceID), zap.String("event", evt.Event))
+			m.mu.Lock()
+			delete(m.currentQRs, instanceID)
+			delete(m.qrContexts, instanceID)
+			m.mu.Unlock()
+			return
+
+		case "error":
+			m.log.Error("erro no pareamento", zap.String("instance_id", instanceID), zap.Error(evt.Error))
+			m.mu.Lock()
+			delete(m.currentQRs, instanceID)
+			delete(m.qrContexts, instanceID)
+			m.mu.Unlock()
+			return
+		default:
+			// Evento desconhecido - logar mas continuar
+			m.log.Debug("evento QR desconhecido", zap.String("instance_id", instanceID), zap.String("event", evt.Event))
+		}
+	}
+
+	// Canal foi fechado
+	m.log.Debug("canal QR foi fechado", zap.String("instance_id", instanceID))
+	m.mu.Lock()
+	delete(m.qrContexts, instanceID)
+	m.mu.Unlock()
+}
+
+// GetQR retorna o QR code atual se disponível.
+// Se a sessão não existir ou não estiver logada, cria uma nova automaticamente.
+func (m *Manager) GetQR(ctx context.Context, instanceID string) (string, error) {
+	m.mu.RLock()
+	client, exists := m.clients[instanceID]
+	currentQR, hasQR := m.currentQRs[instanceID]
+	_, hasQRContext := m.qrContexts[instanceID]
+	m.mu.RUnlock()
+
+	// Se há QR disponível, retornar imediatamente (mesmo que não esteja logado ainda)
+	if hasQR && currentQR != "" {
+		return currentQR, nil
+	}
+
+	// Se existe cliente
+	if exists && client != nil {
+		// Se está logado, não pode gerar QR
+		if client.IsLoggedIn() {
+			return "", fmt.Errorf("instância já conectada, não é possível gerar QR code")
+		}
+
+		// Se não está logado mas há contexto QR ativo, aguardar QR aparecer
+		if hasQRContext {
+			m.log.Debug("sessão sendo criada, aguardando QR code",
+				zap.String("instance_id", instanceID),
+			)
+			// Aguardar um pouco para QR aparecer
+			select {
+			case <-time.After(5 * time.Second):
+				m.mu.RLock()
+				currentQR, hasQR = m.currentQRs[instanceID]
+				m.mu.RUnlock()
+				if hasQR && currentQR != "" {
+					return currentQR, nil
+				}
+				return "", fmt.Errorf("QR code ainda não disponível, aguarde alguns segundos")
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
+		}
+
+		// Cliente existe, não está logado e não há QR nem contexto QR
+		// Isso significa que a sessão falhou - desconectar e recriar
+		m.log.Info("cliente existe mas não está logado e sem QR ativo, desconectando para recriar sessão",
+			zap.String("instance_id", instanceID),
+		)
+		// Desconectar e remover para forçar recriação
+		client.Disconnect()
+		m.mu.Lock()
+		delete(m.clients, instanceID)
+		delete(m.currentQRs, instanceID)
+		if cancel, exists := m.qrContexts[instanceID]; exists {
+			cancel()
+			delete(m.qrContexts, instanceID)
+		}
+		m.mu.Unlock()
+		// Deletar arquivo SQLite inválido antes de criar nova sessão
+		dbPath := filepath.Join(m.baseDir, instanceID+".db")
+		if _, err := os.Stat(dbPath); err == nil {
+			m.log.Info("deletando arquivo SQLite inválido antes de criar nova sessão",
+				zap.String("instance_id", instanceID),
+			)
+			_ = os.Remove(dbPath)
+		}
+		// Agora criar nova sessão
+		return m.CreateSession(ctx, instanceID)
+	}
+
+	// Cliente não existe - verificar se há arquivo SQLite com sessão válida
+	dbPath := filepath.Join(m.baseDir, instanceID+".db")
+	if _, err := os.Stat(dbPath); err == nil {
+		// Arquivo existe - tentar restaurar primeiro
+		client, err := m.restoreSessionIfExists(ctx, instanceID)
+		if err == nil && client != nil && client.IsLoggedIn() {
+			// Restauração bem-sucedida - não precisa de QR
+			return "", fmt.Errorf("instância já conectada, não é necessário QR code")
+		}
+		// Se restauração falhou ou não está logada, deletar arquivo e criar nova sessão
+		m.log.Info("sessão SQLite inválida ou expirada, deletando e criando nova",
+			zap.String("instance_id", instanceID),
+		)
+		_ = os.Remove(dbPath) // Deletar arquivo SQLite
+	}
+
+	// Criar nova sessão
+	return m.CreateSession(ctx, instanceID)
+}
+
+// RestoreSession restaura uma sessão a partir de dados criptografados.
+func (m *Manager) RestoreSession(ctx context.Context, instanceID string, encryptedBlob []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	_, err := crypto.Decrypt(encryptedBlob, m.encKey)
+	if err != nil {
+		return fmt.Errorf("whatsmeow: descriptografar: %w", err)
+	}
+
+	// Restaurar device store a partir dos dados descriptografados
+	clientLog := &noopLogger{}
+	dbPath := fmt.Sprintf("file:%s?_foreign_keys=on", filepath.Join(m.baseDir, instanceID+".db"))
+	container, err := sqlstore.New(ctx, "sqlite3", dbPath, clientLog)
+	if err != nil {
+		return fmt.Errorf("whatsmeow: criar store: %w", err)
+	}
+
+	// Aqui normalmente você restauraria o device store dos dados descriptografados
+	// Por simplicidade, vamos assumir que o arquivo DB já existe
+	deviceStore, err := container.GetFirstDevice(ctx)
+	if err != nil {
+		return fmt.Errorf("whatsmeow: obter device: %w", err)
+	}
+
+	client := whatsmeow.NewClient(deviceStore, clientLog)
+
+	err = client.Connect()
+	if err != nil {
+		return fmt.Errorf("whatsmeow: conectar: %w", err)
+	}
+
+	m.clients[instanceID] = client
+	return nil
+}
+
+// Disconnect desconecta uma sessão.
+func (m *Manager) Disconnect(instanceID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	client, exists := m.clients[instanceID]
+	if exists {
+		// Cancelar contexto QR se existir
+		if cancel, exists := m.qrContexts[instanceID]; exists {
+			cancel()
+			delete(m.qrContexts, instanceID)
+		}
+
+		client.Disconnect()
+		delete(m.clients, instanceID)
+		delete(m.currentQRs, instanceID)
+	}
+
+	// Não deletar o arquivo SQLite aqui - apenas desconectar o cliente em memória
+	// O arquivo SQLite será mantido para permitir reconexão futura
+	return nil
+}
+
+// DeleteSession remove completamente a sessão, incluindo o arquivo SQLite
+func (m *Manager) DeleteSession(instanceID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Desconectar cliente se existir
+	if client, exists := m.clients[instanceID]; exists {
+		// Cancelar contexto QR se existir
+		if cancel, exists := m.qrContexts[instanceID]; exists {
+			cancel()
+			delete(m.qrContexts, instanceID)
+		}
+
+		client.Disconnect()
+		delete(m.clients, instanceID)
+		delete(m.currentQRs, instanceID)
+	}
+
+	// Deletar arquivo SQLite
+	dbPath := filepath.Join(m.baseDir, instanceID+".db")
+	if _, err := os.Stat(dbPath); err == nil {
+		if err := os.Remove(dbPath); err != nil {
+			m.log.Warn("erro ao deletar arquivo SQLite",
+				zap.String("instance_id", instanceID),
+				zap.String("db_path", dbPath),
+				zap.Error(err),
+			)
+			// Não retornar erro - continuar mesmo se não conseguir deletar
+		} else {
+			m.log.Info("arquivo SQLite deletado",
+				zap.String("instance_id", instanceID),
+				zap.String("db_path", dbPath),
+			)
+		}
+	}
+
+	return nil
+}
+
+// GetClient retorna o cliente WhatsMeow para uma instância.
+// Se o cliente não estiver no map, tenta restaurar a sessão do SQLite.
+func (m *Manager) GetClient(instanceID string) (*whatsmeow.Client, error) {
+	m.log.Debug("GetClient chamado",
+		zap.String("instance_id", instanceID),
+	)
+
+	m.mu.RLock()
+	client, exists := m.clients[instanceID]
+	m.mu.RUnlock()
+
+	if exists {
+		m.log.Debug("cliente encontrado no map",
+			zap.String("instance_id", instanceID),
+		)
+		// Verificar se o cliente está realmente logado
+		isLoggedIn := client.IsLoggedIn()
+		if !isLoggedIn {
+			m.log.Warn("cliente existe mas não está logado, removendo e tentando restaurar",
+				zap.String("instance_id", instanceID),
+			)
+			// Remover do map e tentar restaurar
+			m.mu.Lock()
+			delete(m.clients, instanceID)
+			m.mu.Unlock()
+			// Tentar restaurar novamente
+			return m.restoreSessionIfExists(context.Background(), instanceID)
+		}
+		m.log.Debug("cliente está logado e pronto",
+			zap.String("instance_id", instanceID),
+		)
+		return client, nil
+	}
+
+	m.log.Debug("cliente não encontrado no map, tentando restaurar do SQLite",
+		zap.String("instance_id", instanceID),
+	)
+
+	// Tentar restaurar sessão do SQLite
+	return m.restoreSessionIfExists(context.Background(), instanceID)
+}
+
+// restoreSessionIfExists tenta restaurar uma sessão existente do SQLite
+func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string) (*whatsmeow.Client, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Verificar novamente após lock (pode ter sido adicionado por outra goroutine)
+	if client, exists := m.clients[instanceID]; exists {
+		return client, nil
+	}
+
+	dbPath := filepath.Join(m.baseDir, instanceID+".db")
+
+	// Verificar se o arquivo existe
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("sessão não encontrada")
+	}
+
+	m.log.Info("tentando restaurar sessão do SQLite",
+		zap.String("instance_id", instanceID),
+		zap.String("db_path", dbPath),
+	)
+
+	clientLog := &noopLogger{}
+	sqlitePath := fmt.Sprintf("file:%s?_foreign_keys=on", dbPath)
+	container, err := sqlstore.New(ctx, "sqlite3", sqlitePath, clientLog)
+	if err != nil {
+		m.log.Error("erro ao criar container do SQLite",
+			zap.String("instance_id", instanceID),
+			zap.String("db_path", dbPath),
+			zap.Error(err),
+		)
+		return nil, fmt.Errorf("sessão não encontrada")
+	}
+
+	deviceStore, err := container.GetFirstDevice(ctx)
+	if err != nil {
+		m.log.Error("erro ao obter device store",
+			zap.String("instance_id", instanceID),
+			zap.Error(err),
+		)
+		return nil, fmt.Errorf("sessão não encontrada")
+	}
+
+	// Verificar se a sessão está logada (tem JID)
+	if deviceStore.ID == nil || deviceStore.ID.IsEmpty() {
+		m.log.Warn("sessão não está logada (sem JID)",
+			zap.String("instance_id", instanceID),
+			zap.String("db_path", dbPath),
+		)
+		return nil, fmt.Errorf("sessão não encontrada")
+	}
+
+	m.log.Debug("device store obtido com sucesso",
+		zap.String("instance_id", instanceID),
+		zap.String("jid", deviceStore.ID.String()),
+		zap.String("push_name", deviceStore.PushName),
+	)
+
+	// Aplicar configurações de dispositivo ANTES de criar o client
+	if err := m.applyDeviceConfig(ctx, deviceStore); err != nil {
+		m.log.Warn("erro ao aplicar configurações de dispositivo", zap.String("instance_id", instanceID), zap.Error(err))
+		// Continuar mesmo com erro (usar valores padrão)
+	}
+
+	client := whatsmeow.NewClient(deviceStore, clientLog)
+
+	// Adicionar event handler
+	client.AddEventHandler(func(evt any) {
+		m.handleEvent(instanceID, evt)
+	})
+
+	// Conectar
+	m.log.Debug("conectando cliente restaurado", zap.String("instance_id", instanceID))
+	err = client.Connect()
+	if err != nil {
+		m.log.Error("erro ao conectar cliente restaurado",
+			zap.String("instance_id", instanceID),
+			zap.Error(err),
+		)
+		return nil, fmt.Errorf("erro ao restaurar sessão: %w", err)
+	}
+
+	m.log.Debug("cliente conectado, verificando se está logado",
+		zap.String("instance_id", instanceID),
+	)
+
+	// Aguardar um pouco para garantir que a conexão foi estabelecida
+	// e verificar se está realmente logado
+	time.Sleep(1 * time.Second)
+	isLoggedIn := client.IsLoggedIn()
+	m.log.Debug("verificação inicial de login",
+		zap.String("instance_id", instanceID),
+		zap.Bool("is_logged_in", isLoggedIn),
+	)
+
+	if !isLoggedIn {
+		m.log.Warn("cliente restaurado mas não está logado ainda, aguardando...",
+			zap.String("instance_id", instanceID),
+		)
+		// Não retornar erro ainda - pode estar conectando
+		// Aguardar mais um pouco
+		time.Sleep(2 * time.Second)
+		isLoggedIn = client.IsLoggedIn()
+		m.log.Debug("verificação após espera",
+			zap.String("instance_id", instanceID),
+			zap.Bool("is_logged_in", isLoggedIn),
+		)
+		if !isLoggedIn {
+			m.log.Error("cliente restaurado não conseguiu fazer login após espera",
+				zap.String("instance_id", instanceID),
+			)
+			// Atualizar status no banco se tiver instanceRepo
+			if m.instanceRepo != nil {
+				inst, err := m.instanceRepo.GetByID(ctx, instanceID)
+				if err == nil {
+					inst.Status = model.InstanceStatusError
+					_, _ = m.instanceRepo.Update(ctx, inst)
+					m.log.Info("status atualizado para error no banco",
+						zap.String("instance_id", instanceID),
+					)
+				}
+			}
+			return nil, fmt.Errorf("sessão não está logada")
+		}
+	}
+
+	// Adicionar ao map
+	m.clients[instanceID] = client
+
+	// Enviar presence após conexão bem-sucedida
+	go func() {
+		time.Sleep(1 * time.Second)
+		if client.IsLoggedIn() {
+			if err := client.SendPresence(context.Background(), types.PresenceAvailable); err != nil {
+				m.log.Warn("erro ao enviar presence", zap.String("instance_id", instanceID), zap.Error(err))
+			} else {
+				m.log.Info("presence enviado com sucesso", zap.String("instance_id", instanceID))
+			}
+		}
+	}()
+
+	m.log.Info("sessão restaurada com sucesso", zap.String("instance_id", instanceID), zap.Bool("is_logged_in", client.IsLoggedIn()))
+	return client, nil
+}
+
+// RestoreAllSessions tenta restaurar todas as sessões que têm arquivo SQLite válido
+// independente do status no banco de dados
+func (m *Manager) RestoreAllSessions(ctx context.Context, instanceIDs []string) {
+	m.log.Info("iniciando restauração de todas as sessões",
+		zap.Int("total_instances", len(instanceIDs)),
+	)
+
+	for _, instanceID := range instanceIDs {
+		// Verificar se já existe em memória
+		m.mu.RLock()
+		client, exists := m.clients[instanceID]
+		m.mu.RUnlock()
+
+		if exists && client != nil && client.IsLoggedIn() {
+			m.log.Debug("sessão já está em memória e logada, pulando",
+				zap.String("instance_id", instanceID),
+			)
+			continue
+		}
+
+		// Verificar se existe arquivo SQLite
+		dbPath := filepath.Join(m.baseDir, instanceID+".db")
+		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+			m.log.Debug("arquivo SQLite não existe, pulando",
+				zap.String("instance_id", instanceID),
+			)
+			continue
+		}
+
+		// Tentar restaurar em background (não bloquear a inicialização)
+		go func(id string) {
+			client, err := m.restoreSessionIfExists(ctx, id)
+			if err != nil {
+				m.log.Warn("não foi possível restaurar sessão na inicialização",
+					zap.String("instance_id", id),
+					zap.Error(err),
+				)
+				// O callback será chamado pelo handleEvent se houver erro
+				return
+			}
+
+			if client != nil && client.IsLoggedIn() {
+				m.log.Info("sessão restaurada com sucesso na inicialização",
+					zap.String("instance_id", id),
+				)
+				// O callback será chamado automaticamente pelo handleEvent
+			}
+		}(instanceID)
+	}
+
+	m.log.Info("restauração de sessões iniciada em background")
+}
+
+// DiagnosticsInfo contém informações de diagnóstico sobre uma instância
+type DiagnosticsInfo struct {
+	InstanceID        string    `json:"instanceId"`
+	HasClientInMemory bool      `json:"hasClientInMemory"`
+	IsLoggedIn        bool      `json:"isLoggedIn"`
+	HasSQLiteFile     bool      `json:"hasSQLiteFile"`
+	SQLiteFilePath    string    `json:"sqliteFilePath"`
+	SQLiteFileSize    int64     `json:"sqliteFileSize"`
+	SQLiteFileModTime time.Time `json:"sqliteFileModTime"`
+	HasDeviceStore    bool      `json:"hasDeviceStore"`
+	DeviceJID         string    `json:"deviceJid"`
+	DevicePushName    string    `json:"devicePushName"`
+	HasQRCode         bool      `json:"hasQRCode"`
+	LastError         string    `json:"lastError,omitempty"`
+	ClientConnected   bool      `json:"clientConnected"`
+}
+
+// GetDiagnostics retorna informações de diagnóstico sobre uma instância
+func (m *Manager) GetDiagnostics(instanceID string) interface{} {
+	diag := DiagnosticsInfo{
+		InstanceID: instanceID,
+	}
+
+	m.mu.RLock()
+	client, hasClient := m.clients[instanceID]
+	hasQR := m.currentQRs[instanceID] != ""
+	m.mu.RUnlock()
+
+	diag.HasClientInMemory = hasClient
+	diag.HasQRCode = hasQR
+
+	if hasClient {
+		diag.IsLoggedIn = client.IsLoggedIn()
+		// Verificar se o cliente está conectado (não há método direto, mas podemos inferir)
+		diag.ClientConnected = client.IsLoggedIn()
+	}
+
+	// Verificar arquivo SQLite
+	dbPath := filepath.Join(m.baseDir, instanceID+".db")
+	if fileInfo, err := os.Stat(dbPath); err == nil {
+		diag.HasSQLiteFile = true
+		diag.SQLiteFilePath = dbPath
+		diag.SQLiteFileSize = fileInfo.Size()
+		diag.SQLiteFileModTime = fileInfo.ModTime()
+
+		// Tentar obter informações do device store
+		ctx := context.Background()
+		clientLog := &noopLogger{}
+		sqlitePath := fmt.Sprintf("file:%s?_foreign_keys=on", dbPath)
+		container, err := sqlstore.New(ctx, "sqlite3", sqlitePath, clientLog)
+		if err == nil {
+			deviceStore, err := container.GetFirstDevice(ctx)
+			if err == nil {
+				diag.HasDeviceStore = true
+				if deviceStore.ID != nil && !deviceStore.ID.IsEmpty() {
+					diag.DeviceJID = deviceStore.ID.String()
+				}
+				diag.DevicePushName = deviceStore.PushName
+			}
+		}
+	}
+
+	return diag
+}
+
+// SaveSessionBlob salva os dados da sessão de forma criptografada.
+func (m *Manager) SaveSessionBlob(instanceID string) ([]byte, error) {
+	m.mu.RLock()
+	_, exists := m.clients[instanceID]
+	m.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("sessão não encontrada")
+	}
+
+	// Serializar device store (simplificado - em produção, use método adequado)
+	// Por enquanto, retornamos um placeholder
+	data := []byte(fmt.Sprintf("session:%s", instanceID))
+
+	encrypted, err := crypto.Encrypt(data, m.encKey)
+	if err != nil {
+		return nil, fmt.Errorf("whatsmeow: criptografar: %w", err)
+	}
+
+	return encrypted, nil
+}
+
+// mapPlatformType mapeia string do banco para enum do WhatsMeow
+func mapPlatformType(platformType string) *waCompanionReg.DeviceProps_PlatformType {
+	switch platformType {
+	case "CHROME":
+		return waCompanionReg.DeviceProps_CHROME.Enum()
+	case "FIREFOX":
+		return waCompanionReg.DeviceProps_FIREFOX.Enum()
+	case "SAFARI":
+		return waCompanionReg.DeviceProps_SAFARI.Enum()
+	case "EDGE":
+		return waCompanionReg.DeviceProps_EDGE.Enum()
+	case "IPAD":
+		return waCompanionReg.DeviceProps_IPAD.Enum()
+	case "ANDROID_PHONE":
+		return waCompanionReg.DeviceProps_ANDROID_PHONE.Enum()
+	case "IOS_PHONE":
+		return waCompanionReg.DeviceProps_IOS_PHONE.Enum()
+	case "DESKTOP":
+		return waCompanionReg.DeviceProps_DESKTOP.Enum()
+	default:
+		return waCompanionReg.DeviceProps_DESKTOP.Enum()
+	}
+}
+
+// applyDeviceConfig aplica as configurações de dispositivo do banco de dados
+// As configurações (DeviceProps, BaseClientPayload) são aplicadas de forma thread-safe
+// apenas durante o registro inicial, sem modificar as variáveis globais permanentemente
+// NOTA: PushName não é mais alterado para manter o comportamento padrão do whatsmeow
+func (m *Manager) applyDeviceConfig(ctx context.Context, deviceStore *store.Device) error {
+	if m.deviceConfigRepo == nil {
+		return nil
+	}
+
+	config, err := m.deviceConfigRepo.Get(ctx)
+	if err != nil {
+		// Se erro ao buscar, usar valores padrão
+		m.log.Warn("erro ao buscar configurações, usando padrão", zap.Error(err))
+		return nil
+	}
+
+	// Aplicar outras configurações (DeviceProps) apenas durante registro
+	// usando mutex para evitar race conditions entre instâncias
+	// Isso é feito apenas se o deviceStore não tem JID (registro inicial)
+	if deviceStore.ID == nil || deviceStore.ID.IsEmpty() {
+		m.applyDevicePropsForRegistration(ctx, config)
+	}
+
+	m.log.Info("configurações de dispositivo aplicadas",
+		zap.String("platform_type", config.PlatformType),
+		zap.String("os_name", config.OSName),
+	)
+
+	return nil
+}
+
+// applyDevicePropsForRegistration aplica DeviceProps de forma thread-safe
+// apenas durante o registro inicial (quando não há JID)
+// Usa mutex para evitar conflitos entre múltiplas instâncias tentando registrar simultaneamente
+// IMPORTANTE: As variáveis globais são modificadas temporariamente e restauradas após o registro
+func (m *Manager) applyDevicePropsForRegistration(ctx context.Context, config model.DeviceConfig) {
+	// Proteger modificação das variáveis globais (evitar race conditions)
+	deviceConfigMu.Lock()
+	defer deviceConfigMu.Unlock()
+
+	// Salvar valores originais para restaurar depois
+	originalPlatformType := store.DeviceProps.PlatformType
+	originalOS := store.DeviceProps.Os
+	originalVersionPrimary := store.DeviceProps.Version.Primary
+	originalVersionSecondary := store.DeviceProps.Version.Secondary
+	originalVersionTertiary := store.DeviceProps.Version.Tertiary
+
+	// Usar SetOSInfo para definir o OS (já existe no WhatsMeow)
+	store.SetOSInfo(config.OSName, [3]uint32{1, 0, 0})
+
+	// Modificar DeviceProps (usado no DevicePairingData durante registro)
+	// O PlatformType define o ícone que aparece no WhatsApp
+	store.DeviceProps.PlatformType = mapPlatformType(config.PlatformType)
+
+	m.log.Debug("configurações globais aplicadas para registro",
+		zap.String("platform_type", config.PlatformType),
+		zap.String("os_name", config.OSName),
+	)
+
+	// Aguardar um pouco para garantir que o registro use essas configurações
+	// Depois restaurar os valores originais
+	// O tempo de 10 segundos deve ser suficiente para o registro iniciar e usar as configurações
+	go func() {
+		time.Sleep(10 * time.Second)
+
+		deviceConfigMu.Lock()
+		defer deviceConfigMu.Unlock()
+
+		// Restaurar valores originais
+		store.DeviceProps.PlatformType = originalPlatformType
+		store.DeviceProps.Os = originalOS
+		if store.DeviceProps.Version != nil {
+			store.DeviceProps.Version.Primary = originalVersionPrimary
+			store.DeviceProps.Version.Secondary = originalVersionSecondary
+			store.DeviceProps.Version.Tertiary = originalVersionTertiary
+		}
+
+		m.log.Debug("valores globais do WhatsMeow restaurados após registro")
+	}()
+}
+
+// handleEvent processa eventos do WhatsMeow.
+func (m *Manager) handleEvent(instanceID string, evt any) {
+	m.mu.RLock()
+	callback := m.onStatusChange
+	handler := m.eventHandler
+	m.mu.RUnlock()
+
+	// Enviar evento para o webhook handler se configurado
+	if handler != nil {
+		// Obter JID da instância conectada
+		m.mu.RLock()
+		client, exists := m.clients[instanceID]
+		m.mu.RUnlock()
+
+		instanceJID := ""
+		if exists && client != nil && client.Store != nil && client.Store.ID != nil {
+			instanceJID = client.Store.ID.String()
+		}
+
+		// Enviar apenas eventos relevantes para webhooks (mensagens, recibos, presença)
+		switch evt.(type) {
+		case *events.Message, *events.Receipt, *events.Presence, *events.Connected, *events.Disconnected:
+			go handler.Handle(context.Background(), instanceID, instanceJID, client, evt)
+		}
+	}
+
+	switch v := evt.(type) {
+	case *events.Connected:
+		m.log.Info("instância conectada com sucesso", zap.String("instance_id", instanceID))
+		// Enviar presence após conexão
+		m.mu.RLock()
+		client, exists := m.clients[instanceID]
+		m.mu.RUnlock()
+		if exists && client != nil {
+			go func() {
+				time.Sleep(1 * time.Second)
+				if client.IsLoggedIn() {
+					if err := client.SendPresence(context.Background(), types.PresenceAvailable); err != nil {
+						m.log.Warn("erro ao enviar presence", zap.String("instance_id", instanceID), zap.Error(err))
+					} else {
+						m.log.Info("presence enviado após conexão", zap.String("instance_id", instanceID))
+					}
+				}
+			}()
+		}
+		if callback != nil {
+			callback(instanceID, "active")
+		}
+	case *events.PairSuccess:
+		m.log.Info("pareamento concluído",
+			zap.String("instance_id", instanceID),
+			zap.String("user_jid", v.ID.String()),
+		)
+		if callback != nil {
+			callback(instanceID, "active")
+		}
+	case *events.Disconnected:
+		m.log.Warn("instância desconectada",
+			zap.String("instance_id", instanceID),
+		)
+		m.updateInstanceStatus(instanceID, model.InstanceStatusError)
+		if callback != nil {
+			callback(instanceID, "error")
+		}
+	case *events.LoggedOut:
+		m.log.Warn("instância deslogada",
+			zap.String("instance_id", instanceID),
+			zap.String("reason", v.Reason.String()),
+		)
+		m.updateInstanceStatus(instanceID, model.InstanceStatusDisconnected)
+		if callback != nil {
+			callback(instanceID, "disconnected")
+		}
+	case *events.TemporaryBan:
+		m.log.Error("instância temporariamente banida pelo WhatsApp",
+			zap.String("instance_id", instanceID),
+			zap.String("code", v.Code.String()),
+			zap.Duration("expire", v.Expire),
+		)
+		m.updateInstanceStatus(instanceID, model.InstanceStatusError)
+		if callback != nil {
+			callback(instanceID, "error")
+		}
+	case *events.ConnectFailure:
+		m.log.Error("falha ao conectar instância",
+			zap.String("instance_id", instanceID),
+			zap.String("reason", v.Reason.String()),
+			zap.String("message", v.Message),
+		)
+		m.updateInstanceStatus(instanceID, model.InstanceStatusError)
+		if callback != nil {
+			callback(instanceID, "error")
+		}
+	case *events.StreamError:
+		m.log.Error("erro de stream na instância",
+			zap.String("instance_id", instanceID),
+			zap.String("code", v.Code),
+		)
+		m.updateInstanceStatus(instanceID, model.InstanceStatusError)
+		if callback != nil {
+			callback(instanceID, "error")
+		}
+	case *events.PairError:
+		m.log.Error("erro no pareamento",
+			zap.String("instance_id", instanceID),
+			zap.Error(v.Error),
+		)
+		m.updateInstanceStatus(instanceID, model.InstanceStatusError)
+		if callback != nil {
+			callback(instanceID, "error")
+		}
+	case *events.ClientOutdated:
+		m.log.Error("cliente WhatsMeow desatualizado",
+			zap.String("instance_id", instanceID),
+		)
+		m.updateInstanceStatus(instanceID, model.InstanceStatusError)
+		if callback != nil {
+			callback(instanceID, "error")
+		}
+	default:
+		// Outros eventos não tratados explicitamente
+		m.log.Debug("evento recebido",
+			zap.String("instance_id", instanceID),
+			zap.String("event_type", fmt.Sprintf("%T", evt)),
+		)
+	}
+}
+
+// updateInstanceStatus atualiza o status da instância no banco de dados
+func (m *Manager) updateInstanceStatus(instanceID string, status model.InstanceStatus) {
+	if m.instanceRepo == nil {
+		return
+	}
+
+	ctx := context.Background()
+	inst, err := m.instanceRepo.GetByID(ctx, instanceID)
+	if err != nil {
+		m.log.Warn("erro ao buscar instância para atualizar status",
+			zap.String("instance_id", instanceID),
+			zap.Error(err),
+		)
+		return
+	}
+
+	inst.Status = status
+	if _, err := m.instanceRepo.Update(ctx, inst); err != nil {
+		m.log.Warn("erro ao atualizar status da instância no banco",
+			zap.String("instance_id", instanceID),
+			zap.String("status", string(status)),
+			zap.Error(err),
+		)
+	} else {
+		m.log.Info("status da instância atualizado no banco",
+			zap.String("instance_id", instanceID),
+			zap.String("status", string(status)),
+		)
+	}
+}

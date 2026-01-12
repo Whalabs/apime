@@ -1,0 +1,191 @@
+{{define "instance_qr_content"}}
+  <style>
+    .qr-page-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .qr-page-header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text);
+      margin: 0;
+    }
+
+    .qr-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 3rem;
+      text-align: center;
+      max-width: 600px;
+      margin: 0 auto;
+      box-shadow: var(--shadow);
+    }
+
+    .qr-instruction {
+      font-size: 1rem;
+      color: var(--text);
+      margin-bottom: 2rem;
+    }
+
+    .qr-wrapper {
+      background: #ffffff;
+      padding: 1rem;
+      border-radius: 16px;
+      border: 1px solid rgba(0,0,0,0.1);
+      display: inline-block;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .qr-image {
+      width: 280px;
+      height: 280px;
+      display: block;
+      border-radius: 8px;
+    }
+
+    .qr-status {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-top: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      min-height: 24px;
+    }
+
+    .qr-status.success {
+      color: #10b981;
+      font-weight: 600;
+    }
+
+    .btn-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      margin-top: 2rem;
+    }
+
+    .btn-back:hover {
+      background: var(--border);
+      transform: translateY(-1px);
+    }
+
+    .btn-back svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* Loading Spinner */
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--muted);
+      border-bottom-color: transparent;
+      border-radius: 50%;
+      display: inline-block;
+      box-sizing: border-box;
+      animation: rotation 1s linear infinite;
+    }
+
+    @keyframes rotation {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+
+  <div class="qr-page-header">
+    <h1>QR code da instância</h1>
+  </div>
+
+  <div class="qr-card">
+    <p class="qr-instruction">Leia este código no WhatsApp para concluir o pareamento.</p>
+    
+    <div class="qr-wrapper">
+      <img id="qr-image" class="qr-image" src="data:image/png;base64,{{index .Data "QRCode"}}" alt="QR code">
+    </div>
+
+    <div id="qr-status" class="qr-status">
+      <span class="spinner"></span>
+      Aguardando leitura do QR code...
+    </div>
+
+    <p style="display:none;" id="qr-raw">{{index .Data "Raw"}}</p>
+
+    <a href="/dashboard" class="btn-back">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5"/>
+        <path d="M12 19l-7-7 7-7"/>
+      </svg>
+      Voltar
+    </a>
+  </div>
+  
+  <script>
+    const instanceId = "{{index .Data "InstanceID"}}";
+    let pollInterval;
+    
+    function updateQR() {
+      fetch(`/dashboard/instances/${instanceId}/qr/status`)
+        .then(r => r.json())
+        .then(data => {
+          const statusEl = document.getElementById('qr-status');
+          
+          if (data.connected) {
+            clearInterval(pollInterval);
+            statusEl.className = 'qr-status success';
+            statusEl.innerHTML = `
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              Conectado com sucesso!
+            `;
+            setTimeout(() => {
+              window.location.href = '/dashboard';
+            }, 2000);
+            return;
+          }
+          
+          if (data.hasQR && data.qrCode) {
+            // Atualizar QR code se mudou
+            const currentQR = document.getElementById('qr-raw').textContent;
+            if (currentQR !== data.qrCode) {
+              const img = document.getElementById('qr-image');
+              img.src = `/dashboard/instances/${instanceId}/qr/image?code=${encodeURIComponent(data.qrCode)}`;
+              document.getElementById('qr-raw').textContent = data.qrCode;
+              statusEl.innerHTML = 'QR code atualizado. Escaneie novamente.';
+            }
+          } else {
+            statusEl.innerHTML = '<span class="spinner"></span> Gerando novo QR code...';
+          }
+        })
+        .catch(err => {
+          console.error('Erro ao verificar status:', err);
+          document.getElementById('qr-status').textContent = 'Erro ao verificar status. Recarregue a página.';
+        });
+    }
+    
+    // Polling a cada 3 segundos
+    pollInterval = setInterval(updateQR, 3000);
+    
+    // Limpar ao sair da página
+    window.addEventListener('beforeunload', () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    });
+  </script>
+{{end}}
+

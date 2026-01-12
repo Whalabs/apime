@@ -1,0 +1,1160 @@
+{{define "docs_content"}}
+<style>
+  :root {
+    --docs-sidebar-w: 260px;
+    --code-bg: #0f172a;
+    --code-text: #e2e8f0;
+  }
+
+  .docs-layout {
+    display: flex;
+    gap: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  /* Sidebar */
+  .docs-sidebar {
+    width: var(--docs-sidebar-w);
+    position: sticky;
+    top: 2rem;
+    height: calc(100vh - 4rem);
+    overflow-y: auto;
+    padding-right: 1rem;
+    border-right: 1px solid var(--border);
+  }
+
+  .docs-sidebar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .docs-sidebar::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 10px;
+  }
+
+  .nav-group {
+    margin-bottom: 2rem;
+  }
+
+  .nav-group h4 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+    padding-left: 0.5rem;
+  }
+
+  .nav-item {
+    display: block;
+    padding: 0.6rem 0.8rem;
+    font-size: 0.9rem;
+    color: var(--text);
+    text-decoration: none;
+    border-radius: 8px;
+    transition: all 0.2s;
+    margin-bottom: 0.2rem;
+  }
+
+  .nav-item:hover {
+    background: rgba(37, 99, 235, 0.08);
+    color: var(--primary);
+  }
+
+  .nav-item.active {
+    background: var(--primary);
+    color: white !important;
+    font-weight: 600;
+  }
+
+  /* Content */
+  .docs-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .endpoint-section {
+    padding: 3.5rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .endpoint-section:first-child {
+    padding-top: 0;
+  }
+
+  .endpoint-header {
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .endpoint-badge {
+    display: inline-flex;
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .badge-post { background: #10b981; color: white; }
+  .badge-get { background: #3b82f6; color: white; }
+  .badge-put { background: #f59e0b; color: white; }
+  .badge-delete { background: #ef4444; color: white; }
+
+  .endpoint-path {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.1rem;
+    color: var(--text);
+    font-weight: 600;
+    background: rgba(148, 163, 184, 0.1);
+    padding: 0.35rem 0.75rem;
+    border-radius: 8px;
+  }
+
+  .endpoint-desc {
+    color: var(--muted);
+    line-height: 1.6;
+    margin: 1rem 0;
+    font-size: 1rem;
+  }
+
+  /* Two Column Split */
+  .split-view {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 2.5rem;
+  }
+
+  @media (max-width: 1200px) {
+    .split-view { grid-template-columns: 1fr; }
+    .docs-sidebar { display: none; }
+  }
+
+  /* Code Blocks */
+  .code-container {
+    background: var(--code-bg);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 20px 40px -10px rgba(0,0,0,0.4);
+    position: sticky;
+    top: 2rem;
+  }
+
+  .code-header {
+    padding: 0.75rem 1.25rem;
+    background: rgba(255,255,255,0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .code-lang {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .code-body {
+    padding: 1.5rem;
+    margin: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: #f8fafc;
+    line-height: 1.6;
+    overflow-x: auto;
+  }
+
+  pre { margin: 0; white-space: pre-wrap; word-break: break-all; }
+
+  .btn-copy-code {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .btn-copy-code:hover {
+    color: white;
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.2);
+  }
+
+  /* Parameter Tables */
+  .params-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+  }
+
+  .params-table th {
+    text-align: left;
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .params-table td {
+    padding: 1rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    font-size: 0.95rem;
+  }
+
+  .param-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--primary);
+  }
+
+  .param-type {
+    font-size: 0.7rem;
+    color: var(--muted);
+    background: rgba(148, 163, 184, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 0.5rem;
+  }
+
+  .param-required {
+    color: #ef4444;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-left: 0.4rem;
+  }
+
+  /* Introdução */
+  .intro-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2.5rem;
+    margin-bottom: 2rem;
+    box-shadow: var(--shadow);
+  }
+
+  .intro-card h2 { margin-top: 0; font-size: 2rem; background: linear-gradient(to right, var(--primary), var(--primary-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+  /* Section Titles */
+  h3 { font-size: 1.5rem; margin-bottom: 1rem; color: var(--text); }
+
+  .auth-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    background: rgba(37, 99, 235, 0.05);
+    padding: 1.25rem;
+    border-radius: 12px;
+    border: 1px solid rgba(37, 99, 235, 0.1);
+  }
+</style>
+
+<div class="docs-layout">
+  <!-- Sidebar -->
+  <aside class="docs-sidebar">
+    <div class="nav-group">
+      <h4>Conceitos</h4>
+      <a href="#intro" class="nav-item active">Introdução</a>
+      <!-- Health Check precisa ser exibido logo após a introdução para dar destaque ao monitoramento -->
+      <a href="#health-check" class="nav-item">Health Check</a>
+      <a href="#users-admin" class="nav-item">Gerenciamento de Usuários</a>
+      <a href="#webhooks" class="nav-item">Webhooks</a>
+    </div>
+
+    <div class="nav-group">
+      <h4>Instâncias</h4>
+      <a href="#inst-list" class="nav-item">Listar</a>
+      <a href="#inst-create" class="nav-item">Criar</a>
+      <a href="#inst-get" class="nav-item">Ver Detalhes</a>
+      <a href="#inst-update" class="nav-item">Atualizar</a>
+      <a href="#inst-delete" class="nav-item">Remover</a>
+      <a href="#inst-qr" class="nav-item">Conectar (QR)</a>
+      <a href="#inst-status" class="nav-item">Status da Conexão</a>
+      <a href="#inst-dc" class="nav-item">Desconectar</a>
+      <a href="#inst-rotate" class="nav-item">Rotacionar Token</a>
+    </div>
+
+    <div class="nav-group">
+      <h4>Mensagens</h4>
+      <a href="#msg-list" class="nav-item">Listar Enviadas</a>
+      <a href="#msg-text" class="nav-item">Texto Simples</a>
+      <a href="#msg-media" class="nav-item">Mídia (Imagem/Video)</a>
+      <a href="#msg-audio" class="nav-item">Áudio (PTT)</a>
+      <a href="#msg-doc" class="nav-item">Documento</a>
+    </div>
+
+    <div class="nav-group">
+      <h4>Perfil & Contatos</h4>
+      <a href="#prof-info" class="nav-item">Ver Perfil</a>
+      <a href="#prof-biz" class="nav-item">Perfil Business</a>
+      <a href="#prof-pic" class="nav-item">Foto de Perfil</a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="docs-main">
+
+    <section id="intro" class="endpoint-section">
+      <div class="intro-card">
+        <h2>Documentação da API v1</h2>
+        <p>Bem-vindo ao <strong>ApiMe</strong>. Nossa API REST fornece uma interface poderosa para interagir com o WhatsApp através do motor WhatsMeow em Go.</p>
+        <p>Utilizamos padrões da indústria para garantir que sua integração seja segura, escalável e extremamente rápida.</p>
+        {{if eq .UserRole "admin"}}
+        <div style="margin-top: 2rem;">
+          <a href="/dashboard/docs/openapi" class="btn-copy-code" style="display: inline-flex; width: auto; color: var(--text); border-color: var(--border);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Baixar OpenAPI Spec (YAML)
+          </a>
+        </div>
+        {{end}}
+      </div>
+    </section>
+
+    <!-- Health Check -->
+    <section id="health-check" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-get">GET</span>
+            <span class="endpoint-path">/healthz</span>
+          </div>
+          <h3>Monitoramento (Health Check)</h3>
+          <p class="endpoint-desc">
+            Endpoint público usado por load balancers, monitoramento externo ou scripts internos para validar se o serviço está saudável.
+            Não requer autenticação e responde rapidamente com um JSON simples.
+          </p>
+          <ul>
+            <li><strong>Resposta 200 OK:</strong> <code>{"status":"ok"}</code></li>
+            <li><strong>Tempo limite recomendado:</strong> 2s</li>
+            <li><strong>Uso sugerido:</strong> componentes que precisam saber se a API está pronta antes de liberar tráfego.</li>
+          </ul>
+          <p class="endpoint-desc" style="margin-top:1rem;">
+            Para detalhes extras, consulte <code>docs/health-check.md</code> no repositório.
+          </p>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -s {{.BaseURL}}/api/healthz' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -s {{.BaseURL}}/api/healthz
+# Saída esperada:
+{"status":"ok"}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Usuários (Admin) -->
+    <section id="users-admin" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <h3>Gerenciamento de Usuários (somente Admin)</h3>
+          <p class="endpoint-desc">
+            Admins autenticados via token Bearer conseguem criar usuários, redefinir senhas,
+            remover contas e gerar tokens de API para integrações externas. Requisições devem
+            incluir <code>Authorization: Bearer &lt;TOKEN_DO_ADMIN&gt;</code>.
+          </p>
+
+          <div class="auth-info">
+            <div>
+              <strong style="color: var(--primary);">GET /users</strong><br>
+              <small>Lista todos os usuários registrados.</small>
+            </div>
+            <div>
+              <strong style="color: var(--primary);">POST /users</strong><br>
+              <small>Cria um usuário com senha inicial e, opcionalmente, define o papel (admin/user).</small>
+            </div>
+            <div>
+              <strong style="color: var(--primary);">PATCH /users/:id/password</strong><br>
+              <small>Atualiza a senha de qualquer usuário.</small>
+            </div>
+            <div>
+              <strong style="color: var(--primary);">POST /users/:id/token</strong><br>
+              <small>Gera um novo token de API e retorna o valor em texto plano apenas uma vez.</small>
+            </div>
+            <div>
+              <strong style="color: var(--primary);">DELETE /users/:id</strong><br>
+              <small>Remove usuários (com proteção para não excluir o último admin).</small>
+            </div>
+          </div>
+
+          <table class="params-table">
+            <thead><tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr><td><span class="param-name">email</span><span class="param-required">*</span></td><td>string</td><td>Email único do usuário.</td></tr>
+              <tr><td><span class="param-name">password</span><span class="param-required">*</span></td><td>string</td><td>Mínimo 8 caracteres.</td></tr>
+              <tr><td><span class="param-name">role</span></td><td>string</td><td><code>admin</code> ou <code>user</code> (padrão admin).</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/users -H "Authorization: Bearer $ADMIN_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body"># Exemplo: listar usuários utilizando token de admin
+curl -X GET {{.BaseURL}}/api/users \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# Criar usuário (retorna API token imediatamente)
+curl -X POST {{.BaseURL}}/api/users \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "operacao@empresa.com",
+    "password": "Sup3rSenha!",
+    "role": "user"
+  }'
+# Resposta:
+# {
+#   "data": {
+#     "user": { ... },
+#     "apiToken": "eyJhbGciOiJIUzI1..."
+#   }
+# }</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Webhooks -->
+    <section id="webhooks" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <h3>Webhooks</h3>
+          <p class="endpoint-desc">O ApiMe envia notificações automáticas para a <code>webhook_url</code> configurada na instância sempre que eventos relevantes ocorrem.</p>
+          <div class="auth-info">
+            <div>
+              <strong style="color: var(--primary);">Segurança</strong><br>
+              <small>Se <code>webhook_secret</code> for definido, as requisições incluirão o cabeçalho <code>X-ApiMe-Signature</code> (SHA256 HMAC do payload).</small>
+            </div>
+          </div>
+          <table class="params-table">
+            <thead><tr><th>Evento</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr><td><span class="param-name">message</span></td><td>Nova mensagem recebida.</td></tr>
+              <tr><td><span class="param-name">receipt</span></td><td>Confirmação de leitura/entrega.</td></tr>
+              <tr><td><span class="param-name">presence</span></td><td>Status de online/visto por último.</td></tr>
+              <tr><td><span class="param-name">connected</span></td><td>Instância conectada com sucesso.</td></tr>
+              <tr><td><span class="param-name">disconnected</span></td><td>Instância desconectada.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">Exemplo de Payload</span>
+            </div>
+            <pre class="code-body">{
+  "id": "uuid-do-evento",
+  "instanceId": "uuid-da-instancia",
+  "type": "message",
+  "payload": {
+    "from": "551199999999",
+    "text": "Olá!",
+    "messageId": "ABC12345"
+  },
+  "createdAt": "2024-03-20T..."
+}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Listar Instâncias -->
+    <section id="inst-list" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-get">GET</span>
+            <span class="endpoint-path">/instances</span>
+          </div>
+          <h3>Listar Instâncias</h3>
+          <p class="endpoint-desc">Retorna a lista completa de instâncias associadas à sua conta.</p>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances -H "Authorization: Bearer $JWT_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances \
+  -H "Authorization: Bearer $JWT_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Criar Instância -->
+    <section id="inst-create" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-post">POST</span>
+            <span class="endpoint-path">/instances</span>
+          </div>
+          <h3>Criar Instância</h3>
+          <p class="endpoint-desc">Cria uma nova instância do WhatsApp. Você pode configurar um webhook opcional para receber eventos.</p>
+          <table class="params-table">
+            <thead><tr><th>Parâmetro</th><th>Tipo</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr><td><span class="param-name">name</span><span class="param-required">*</span></td><td>string</td><td>Nome identificador da instância.</td></tr>
+              <tr><td><span class="param-name">webhook_url</span></td><td>string</td><td>URL para receber notificações.</td></tr>
+              <tr><td><span class="param-name">webhook_secret</span></td><td>string</td><td>Chave para validar o webhook.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" onclick="window.copyToClipboard(null, this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X POST {{.BaseURL}}/api/instances \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Minha Instancia",
+    "webhook_url": "https://meusite.com/callback"
+  }'
+# Resposta:
+# {
+#   "data": {
+#     "instance": { ... },
+#     "token": "inst_token_..."
+#   }
+# }</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Ver Detalhes -->
+    <section id="inst-get" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-get">GET</span>
+            <span class="endpoint-path">/instances/:id</span>
+          </div>
+          <h3>Ver Detalhes</h3>
+          <p class="endpoint-desc">Retorna os dados cadastrados de uma instância específica pelo seu UUID.</p>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances/{instanceId} -H "Authorization: Bearer $JWT_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances/{instanceId} \
+  -H "Authorization: Bearer $JWT_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Atualizar Instância -->
+    <section id="inst-update" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-put">PUT</span>
+            <span class="endpoint-path">/instances/:id</span>
+          </div>
+          <h3>Atualizar Instância</h3>
+          <p class="endpoint-desc">Atualiza o nome ou as configurações de webhook de uma instância.</p>
+          <table class="params-table">
+            <thead><tr><th>Parâmetro</th><th>Tipo</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr><td><span class="param-name">name</span><span class="param-required">*</span></td><td>string</td><td>Novo nome da instância.</td></tr>
+              <tr><td><span class="param-name">webhook_url</span></td><td>string</td><td>Nova URL de webhook.</td></tr>
+              <tr><td><span class="param-name">webhook_secret</span></td><td>string</td><td>Novo segredo de webhook.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" onclick="window.copyToClipboard(null, this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X PUT {{.BaseURL}}/api/instances/{instanceId} \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Nome Atualizado"
+  }'</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Remover Instância -->
+    <section id="inst-delete" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-delete">DELETE</span>
+            <span class="endpoint-path">/instances/:id</span>
+          </div>
+          <h3>Remover Instância</h3>
+          <p class="endpoint-desc">Remove permanentemente uma instância e todos os seus dados de sessão.</p>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X DELETE {{.BaseURL}}/api/instances/{instanceId} -H "Authorization: Bearer $JWT_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X DELETE {{.BaseURL}}/api/instances/{instanceId} \
+  -H "Authorization: Bearer $JWT_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Conectar (QR) -->
+    <section id="inst-qr" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-get">GET</span>
+            <span class="endpoint-path">/instances/:id/qr</span>
+          </div>
+          <h3>Conectar (QR Code)</h3>
+          <p class="endpoint-desc">Gera um novo QR Code para pareamento. Note que a requisição aguarda a geração do código pelo motor WhatsApp (timeout recomendado: 30s).</p>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances/{instanceId}/qr -H "Authorization: Bearer $JWT_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances/{instanceId}/qr \
+  -H "Authorization: Bearer $JWT_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Status -->
+    <section id="inst-status" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-get">GET</span>
+            <span class="endpoint-path">/instances/:id/info</span>
+          </div>
+          <h3>Status da Conexão</h3>
+          <p class="endpoint-desc">Verifica se a instância está conectada aos servidores do WhatsApp em tempo real.</p>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances/{instanceId}/info -H "Authorization: Bearer $INSTANCE_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances/{instanceId}/info \
+  -H "Authorization: Bearer $INSTANCE_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Desconectar -->
+    <section id="inst-dc" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-post">POST</span>
+            <span class="endpoint-path">/instances/:id/disconnect</span>
+          </div>
+          <h3>Desconectar</h3>
+          <p class="endpoint-desc">Encerra a sessão ativa no WhatsApp e desconecta o dispositivo.</p>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X POST {{.BaseURL}}/api/instances/{instanceId}/disconnect -H "Authorization: Bearer $JWT_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X POST {{.BaseURL}}/api/instances/{instanceId}/disconnect \
+  -H "Authorization: Bearer $JWT_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Rotacionar Token -->
+    <section id="inst-rotate" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-post">POST</span>
+            <span class="endpoint-path">/instances/:id/token/rotate</span>
+          </div>
+          <h3>Rotacionar Token</h3>
+          <p class="endpoint-desc">Gera um novo token de acesso para a instância e invalida o anterior imediatamente.</p>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X POST {{.BaseURL}}/api/instances/{instanceId}/token/rotate -H "Authorization: Bearer $JWT_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X POST {{.BaseURL}}/api/instances/{instanceId}/token/rotate \
+  -H "Authorization: Bearer $JWT_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Eventos de Webhook -->
+    <section id="webhook-events" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-webhook">WEBHOOK</span>
+            <span class="endpoint-path">POST {webhook_url}</span>
+          </div>
+          <h3>Eventos de Webhook</h3>
+          <p class="endpoint-desc">Quando mensagens são recebidas ou eventos ocorrem, a API envia POST requests para o <code>webhook_url</code> configurado. Todos os eventos incluem assinatura HMAC-SHA256 no header <code>X-ApiMe-Signature</code> se <code>webhook_secret</code> estiver definido.</p>
+          <h4>Tipos de Eventos</h4>
+          <table class="params-table">
+            <thead><tr><th>Tipo</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr><td><code>message</code></td><td>Mensagem recebida (texto, mídia, localização, contato, etc.)</td></tr>
+              <tr><td><code>receipt</code></td><td>Confirmação de entrega/leitura de mensagens enviadas</td></tr>
+              <tr><td><code>presence</code></td><td>Status online/offline de contatos</td></tr>
+              <tr><td><code>connected</code></td><td>Instância conectada ao WhatsApp</td></tr>
+              <tr><td><code>disconnected</code></td><td>Instância desconectada do WhatsApp</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">Estrutura Geral</span>
+            </div>
+            <pre class="code-body">{
+  "id": "uuid-do-evento",
+  "instanceId": "uuid-da-instancia",
+  "type": "message|receipt|presence|connected|disconnected",
+  "payload": { ... },
+  "createdAt": "2024-03-20T..."
+}</pre>
+          </div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">Mensagem de Texto</span>
+            </div>
+            <pre class="code-body">{
+  "id": "uuid-do-evento",
+  "instanceId": "uuid-da-instancia",
+  "type": "message",
+  "payload": {
+    "from": "551199999999",
+    "messageId": "ABC12345",
+    "timestamp": 1700956800,
+    "pushName": "João Silva",
+    "text": "Olá, tudo bem?"
+  },
+  "createdAt": "2024-03-20T..."
+}</pre>
+          </div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">Mensagem com Imagem</span>
+            </div>
+            <pre class="code-body">{
+  "id": "uuid-do-evento",
+  "instanceId": "uuid-da-instancia",
+  "type": "message",
+  "payload": {
+    "from": "551199999999",
+    "messageId": "DEF67890",
+    "timestamp": 1700956800,
+    "pushName": "João Silva",
+    "mediaType": "image",
+    "mediaUrl": "https://mmg.whatsapp.net/...",
+    "mimetype": "image/jpeg",
+    "fileSize": 2048576,
+    "caption": "Foto da reunião"
+  },
+  "createdAt": "2024-03-20T..."
+}</pre>
+          </div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">Mensagem com Vídeo/Documento</span>
+            </div>
+            <pre class="code-body">{
+  "id": "uuid-do-evento",
+  "instanceId": "uuid-da-instancia",
+  "type": "message",
+  "payload": {
+    "from": "551199999999",
+    "messageId": "GHI54321",
+    "timestamp": 1700956800,
+    "pushName": "João Silva",
+    "mediaType": "video",
+    "mediaUrl": "https://mmg.whatsapp.net/...",
+    "mimetype": "video/mp4",
+    "fileSize": 15728640,
+    "duration": 45,
+    "caption": "Vídeo da apresentação"
+  },
+  "createdAt": "2024-03-20T..."
+}</pre>
+          </div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">Confirmação de Entrega</span>
+            </div>
+            <pre class="code-body">{
+  "id": "uuid-do-evento",
+  "instanceId": "uuid-da-instancia",
+  "type": "receipt",
+  "payload": {
+    "messageIds": ["ABC12345"],
+    "from": "551199999999",
+    "status": "delivered"
+  },
+  "createdAt": "2024-03-20T..."
+}</pre>
+          </div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">Status de Conexão</span>
+            </div>
+            <pre class="code-body">{
+  "id": "uuid-do-evento",
+  "instanceId": "uuid-da-instancia",
+  "type": "connected",
+  "payload": {},
+  "createdAt": "2024-03-20T..."
+}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Listar Mensagens -->
+    <section id="msg-list" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-get">GET</span>
+            <span class="endpoint-path">/instances/:id/messages</span>
+          </div>
+          <h3>Listar Mensagens</h3>
+          <p class="endpoint-desc">Retorna o histórico das últimas mensagens processadas por esta instância.</p>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances/{instanceId}/messages -H "Authorization: Bearer $JWT_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances/{instanceId}/messages \
+  -H "Authorization: Bearer $JWT_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Enviar Texto -->
+    <section id="msg-text" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-post">POST</span>
+            <span class="endpoint-path">/instances/:id/messages/text</span>
+          </div>
+          <h3>Enviar Mensagem de Texto</h3>
+          <p class="endpoint-desc">Envia uma mensagem de texto. O parâmetro <code>to</code> aceita tanto o número puro (ex: <code>5511999999999</code>) quanto o JID completo (ex: <code>5511999999999</code>). Para números brasileiros, o sistema remove automaticamente o nono dígito se necessário.</p>
+          <table class="params-table">
+            <thead><tr><th>Body (JSON)</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr><td><span class="param-name">to</span><span class="param-required">*</span></td><td>Destinatário (ex: 5511999999999)</td></tr>
+              <tr><td><span class="param-name">text</span><span class="param-required">*</span></td><td>Conteúdo da mensagem (UTF-8)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" onclick="window.copyToClipboard(null, this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X POST {{.BaseURL}}/api/instances/{instanceId}/messages/text \
+  -H "Authorization: Bearer $INSTANCE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "5511999999999",
+    "text": "Olá do ApiMe!"
+  }'</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Enviar Mídia -->
+    <section id="msg-media" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-post">POST</span>
+            <span class="endpoint-path">/instances/:id/messages/media</span>
+          </div>
+          <h3>Enviar Fotos & Vídeos</h3>
+          <p class="endpoint-desc">Envio via <code>multipart/form-data</code> para upload direto de arquivos.</p>
+          <table class="params-table">
+            <thead><tr><th>Campo</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr><td><span class="param-name">to</span></td><td>Destinatário</td></tr>
+              <tr><td><span class="param-name">type</span></td><td><code>image</code> ou <code>video</code></td></tr>
+              <tr><td><span class="param-name">file</span></td><td>Binário do arquivo</td></tr>
+              <tr><td><span class="param-name">caption</span></td><td>Legenda opcional</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X POST {{.BaseURL}}/api/instances/{instanceId}/messages/media -H "Authorization: Bearer $INSTANCE_TOKEN" -F "to=5511999999999" -F "type=image" -F "file=@/fotos/exemplo.png" -F "caption=Confira este upload!"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X POST {{.BaseURL}}/api/instances/{instanceId}/messages/media \
+  -H "Authorization: Bearer $INSTANCE_TOKEN" \
+  -F "to=5511999999999" \
+  -F "type=image" \
+  -F "file=@/fotos/exemplo.png" \
+  -F "caption=Confira este upload!"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Enviar Áudio -->
+    <section id="msg-audio" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-post">POST</span>
+            <span class="endpoint-path">/instances/:id/messages/audio</span>
+          </div>
+          <h3>Enviar Áudio (PTT)</h3>
+          <p class="endpoint-desc">Envia um arquivo de áudio como mensagem de voz (Push-to-Talk). Recomenda-se usar formato <code>.ogg</code> com codec Opus para melhor compatibilidade.</p>
+          <table class="params-table">
+            <thead><tr><th>Campo</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr><td><span class="param-name">to</span><span class="param-required">*</span></td><td>Destinatário (ex: 5511999999999)</td></tr>
+              <tr><td><span class="param-name">file</span><span class="param-required">*</span></td><td>Arquivo de áudio (recomendado: <code>.ogg</code> com Opus)</td></tr>
+              <tr><td><span class="param-name">ptt</span></td><td><code>true</code> para exibir como mensagem de voz (bolinha azul)</td></tr>
+              <tr><td><span class="param-name">seconds</span></td><td>Duração em segundos (melhora exibição da waveform)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X POST {{.BaseURL}}/api/instances/{instanceId}/messages/audio -H "Authorization: Bearer $INSTANCE_TOKEN" -F "to=5511999999999" -F "file=@/audios/mensagem.ogg" -F "ptt=true" -F "seconds=10"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X POST {{.BaseURL}}/api/instances/{instanceId}/messages/audio \
+  -H "Authorization: Bearer $INSTANCE_TOKEN" \
+  -F "to=5511999999999" \
+  -F "file=@/audios/mensagem.ogg" \
+  -F "ptt=true" \
+  -F "seconds=10"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Enviar Documento -->
+    <section id="msg-doc" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-post">POST</span>
+            <span class="endpoint-path">/instances/:id/messages/document</span>
+          </div>
+          <h3>Enviar Documento</h3>
+          <p class="endpoint-desc">Envia arquivos PDF, DOCX, ZIP, entre outros.</p>
+          <table class="params-table">
+            <thead><tr><th>Campo</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr><td><span class="param-name">to</span></td><td>Destinatário</td></tr>
+              <tr><td><span class="param-name">file</span></td><td>Binário do arquivo</td></tr>
+              <tr><td><span class="param-name">caption</span></td><td>Legenda opcional</td></tr>
+              <tr><td><span class="param-name">fileName</span></td><td>Nome do arquivo que aparecerá no WhatsApp</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X POST {{.BaseURL}}/api/instances/{instanceId}/messages/document -H "Authorization: Bearer $INSTANCE_TOKEN" -F "to=5511999999999" -F "file=@/docs/fatura.pdf" -F "fileName=Fatura.pdf"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X POST {{.BaseURL}}/api/instances/{instanceId}/messages/document \
+  -H "Authorization: Bearer $INSTANCE_TOKEN" \
+  -F "to=5511999999999" \
+  -F "file=@/docs/fatura.pdf" \
+  -F "fileName=Fatura.pdf"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Perfil -->
+    <section id="prof-info" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-get">GET</span>
+            <span class="endpoint-path">/instances/:id/profile/:jid</span>
+          </div>
+          <h3>Consultar Perfil</h3>
+          <p class="endpoint-desc">Obtém dados públicos (Nome, Recado, Status) de qualquer contato do WhatsApp.</p>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances/{instanceId}/profile/5511999999999 -H "Authorization: Bearer $INSTANCE_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances/{instanceId}/profile/5511999999999 \
+  -H "Authorization: Bearer $INSTANCE_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Perfil Business -->
+    <section id="prof-biz" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-get">GET</span>
+            <span class="endpoint-path">/instances/:id/business/:jid</span>
+          </div>
+          <h3>Perfil Business</h3>
+          <p class="endpoint-desc">Obtém informações comerciais expandidas (Endereço, E-mail, Categoria, Site) de contas Business.</p>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances/{instanceId}/business/5511999999999 -H "Authorization: Bearer $INSTANCE_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances/{instanceId}/business/5511999999999 \
+  -H "Authorization: Bearer $INSTANCE_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Foto de Perfil -->
+    <section id="prof-pic" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-get">GET</span>
+            <span class="endpoint-path">/instances/:id/profile-pic/:jid</span>
+          </div>
+          <h3>Foto de Perfil</h3>
+          <p class="endpoint-desc">Retorna a URL da foto de perfil em alta resolução do contato informado.</p>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances/{instanceId}/profile-pic/5511999999999 -H "Authorization: Bearer $INSTANCE_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances/{instanceId}/profile-pic/5511999999999 \
+  -H "Authorization: Bearer $INSTANCE_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+
+  </main>
+</div>
+
+<script>
+  // Utilitário de Cópia
+  window.copyToClipboard = async function(text, btn) {
+    try {
+      // Se texto não fornecido, busca do elemento .code-body vizinho
+      if (!text && btn) {
+        const container = btn.closest('.code-container');
+        const codeBlock = container.querySelector('.code-body');
+        if (codeBlock) {
+          text = codeBlock.textContent;
+        }
+      }
+
+      await navigator.clipboard.writeText(text);
+      const originalText = btn.textContent;
+      btn.textContent = 'Copiado!';
+      btn.style.color = '#10b981';
+      setTimeout(() => {
+        btn.textContent = originalText;
+        btn.style.color = '';
+      }, 2000);
+    } catch (err) {
+      console.error('Erro ao copiar:', err);
+    }
+  };
+
+  // Active Nav on Scroll
+  document.addEventListener('DOMContentLoaded', () => {
+    const sections = document.querySelectorAll('.endpoint-section');
+    const navItems = document.querySelectorAll('.nav-item');
+
+    function updateNav() {
+      let current = '';
+      sections.forEach(section => {
+        const sectionTop = section.offsetTop;
+        if (window.pageYOffset >= sectionTop - 200) {
+          current = section.getAttribute('id');
+        }
+      });
+
+      navItems.forEach(item => {
+        item.classList.remove('active');
+        if (item.getAttribute('href').substring(1) === current) {
+          item.classList.add('active');
+        }
+      });
+    }
+
+    window.addEventListener('scroll', updateNav);
+    updateNav();
+  });
+</script>
+{{end}}

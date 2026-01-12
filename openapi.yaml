@@ -1,0 +1,482 @@
+openapi: 3.0.3
+info:
+  title: ApiMe
+  version: "1.0.0"
+  description: API para orquestração de múltiplas instâncias.
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local
+
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      tags: [Sistema]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /auth/login:
+    post:
+      summary: Autenticar usuário
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Token JWT
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+
+  /users:
+    get:
+      summary: Listar usuários
+      tags: [Usuários]
+      security: [{bearerAuth: []}]
+      responses:
+        "200":
+          description: Lista de usuários
+    post:
+      summary: Criar usuário
+      tags: [Usuários]
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                role:
+                  type: string
+                  enum: [admin, user]
+      responses:
+        "201":
+          description: Usuário criado
+
+  /users/{id}:
+    delete:
+      summary: Remover usuário
+      tags: [Usuários]
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: "#/components/parameters/userId"
+      responses:
+        "200":
+          description: Removido
+
+  /users/{id}/password:
+    patch:
+      summary: Alterar senha
+      tags: [Usuários]
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: "#/components/parameters/userId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Senha alterada
+
+  /users/{id}/token:
+    post:
+      summary: Rotacionar API token do usuário
+      tags: [Usuários]
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: "#/components/parameters/userId"
+      responses:
+        "200":
+          description: Novo token gerado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+
+  /instances:
+    get:
+      summary: Listar instâncias
+      tags: [Instâncias]
+      security: [{bearerAuth: []}]
+      responses:
+        "200":
+          description: Lista de instâncias
+    post:
+      summary: Criar instância
+      tags: [Instâncias]
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                webhook_url:
+                  type: string
+                webhook_secret:
+                  type: string
+      responses:
+        "201":
+          description: Instância criada
+
+  /instances/{id}:
+    get:
+      summary: Detalhar instância
+      tags: [Instâncias]
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Dados da instância
+    put:
+      summary: Atualizar instância
+      tags: [Instâncias]
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                webhook_url:
+                  type: string
+                webhook_secret:
+                  type: string
+      responses:
+        "200":
+          description: Atualizada
+    delete:
+      summary: Remover instância
+      tags: [Instâncias]
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "204":
+          description: Removida
+
+  /instances/{id}/qr:
+    get:
+      summary: Gerar QR Code
+      tags: [Conexão]
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: QR code base64
+
+  /instances/{id}/disconnect:
+    post:
+      summary: Desconectar instância
+      tags: [Conexão]
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Desconectado
+
+  /instances/{id}/token/rotate:
+    post:
+      summary: Rotacionar token da instância
+      tags: [Instâncias]
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Novo token
+
+  /instances/{id}/messages/text:
+    post:
+      summary: Enviar texto
+      tags: [Mensagens]
+      security: [{bearerAuth: []}, {instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, text]
+              properties:
+                to:
+                  type: string
+                  example: "5511999999999"
+                text:
+                  type: string
+      responses:
+        "200":
+          description: Enviado
+
+  /instances/{id}/messages/media:
+    post:
+      summary: Enviar mídia (imagem ou vídeo)
+      tags: [Mensagens]
+      security: [{bearerAuth: []}, {instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [to, type, file]
+              properties:
+                to:
+                  type: string
+                  description: JID do destinatário
+                type:
+                  type: string
+                  enum: [image, video]
+                  description: Tipo de mídia
+                file:
+                  type: string
+                  format: binary
+                  description: Arquivo de imagem ou vídeo
+                caption:
+                  type: string
+                  description: Legenda (opcional)
+      responses:
+        "200":
+          description: Enviado
+
+
+  /instances/{id}/messages/audio:
+    post:
+      summary: Enviar áudio
+      tags: [Mensagens]
+      security: [{bearerAuth: []}, {instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [to, file]
+              properties:
+                to:
+                  type: string
+                  description: JID do destinatário
+                file:
+                  type: string
+                  format: binary
+                  description: Arquivo de áudio
+                ptt:
+                  type: boolean
+                  description: Push-to-Talk (áudio de voz)
+                  default: false
+                seconds:
+                  type: integer
+                  description: Duração em segundos
+      responses:
+        "200":
+          description: Enviado
+
+
+  /instances/{id}/messages/document:
+    post:
+      summary: Enviar documento
+      tags: [Mensagens]
+      security: [{bearerAuth: []}, {instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [to, file]
+              properties:
+                to:
+                  type: string
+                  description: JID do destinatário
+                file:
+                  type: string
+                  format: binary
+                  description: Arquivo do documento
+                caption:
+                  type: string
+                  description: Legenda (opcional)
+                filename:
+                  type: string
+                  description: Nome do arquivo (opcional)
+      responses:
+        "200":
+          description: Enviado
+
+
+  /media/{instanceId}/{mediaId}:
+    get:
+      summary: Download de mídia
+      tags: [Mídia]
+      parameters:
+        - name: instanceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: mediaId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Arquivo binário
+
+  /instances/{id}/info:
+    get:
+      summary: Informações da instância conectada
+      tags: [Conexão]
+      security: [{bearerAuth: []}, {instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Status e JID da instância
+
+  /instances/{id}/messages:
+    get:
+      summary: Listar mensagens enviadas
+      tags: [Mensagens]
+      security: [{bearerAuth: []}, {instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Lista de mensagens
+
+  /instances/{id}/profile/{jid}:
+    get:
+      summary: Obter perfil de contato
+      tags: [Perfil]
+      security: [{bearerAuth: []}, {instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: jid
+          in: path
+          required: true
+          schema:
+            type: string
+          description: JID do contato
+      responses:
+        "200":
+          description: Dados do perfil
+
+  /instances/{id}/business/{jid}:
+    get:
+      summary: Obter perfil business
+      tags: [Perfil]
+      security: [{bearerAuth: []}, {instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: jid
+          in: path
+          required: true
+          schema:
+            type: string
+          description: JID do contato
+      responses:
+        "200":
+          description: Dados do perfil business
+
+  /instances/{id}/profile/{jid}/picture:
+    get:
+      summary: Obter foto de perfil
+      tags: [Perfil]
+      security: [{bearerAuth: []}, {instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: jid
+          in: path
+          required: true
+          schema:
+            type: string
+          description: JID do contato
+      responses:
+        "200":
+          description: URL da foto de perfil
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    instanceToken:
+      type: http
+      scheme: bearer
+      description: Token da instância
+
+  parameters:
+    instanceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    userId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid

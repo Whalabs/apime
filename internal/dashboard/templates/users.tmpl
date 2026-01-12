@@ -1,0 +1,1265 @@
+{{define "users_content"}}
+<style>
+  .users-container {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .users-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .users-header h1 {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.8rem;
+    margin: 0;
+    color: var(--text);
+  }
+
+  .users-header-icon {
+    width: 28px;
+    height: 28px;
+    stroke-width: 1.5;
+  }
+
+  .btn-add-user {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.25);
+  }
+
+  .btn-add-user:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 15px -3px rgba(37, 99, 235, 0.35);
+  }
+
+  .btn-add-user svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+  }
+
+  /* Tabela de Usuários */
+  .users-table-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+
+  .users-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+  }
+
+  .users-table thead {
+    background: rgba(15, 23, 42, 0.04);
+  }
+
+  [data-theme="dark"] .users-table thead {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .users-table th {
+    padding: 1rem 1.25rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .users-table td {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.95rem;
+  }
+
+  .users-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .users-table tbody tr:hover {
+    background: rgba(37, 99, 235, 0.04);
+  }
+
+  [data-theme="dark"] .users-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .users-table .user-email {
+    font-weight: 500;
+  }
+
+  /* Badge de Papel */
+  .role-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .role-badge.admin {
+    background: rgba(124, 58, 237, 0.15);
+    color: #a78bfa;
+  }
+
+  .role-badge.user {
+    background: rgba(34, 197, 94, 0.15);
+    color: #86efac;
+  }
+
+  [data-theme="light"] .role-badge.admin {
+    background: rgba(124, 58, 237, 0.12);
+    color: #7c3aed;
+  }
+
+  [data-theme="light"] .role-badge.user {
+    background: rgba(34, 197, 94, 0.12);
+    color: #16a34a;
+  }
+
+  /* Botões de Ação */
+  .action-buttons {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(148, 163, 184, 0.08);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .action-btn:hover {
+    background: rgba(37, 99, 235, 0.1);
+    border-color: rgba(37, 99, 235, 0.3);
+    color: var(--primary);
+  }
+
+  .action-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+  }
+
+  .action-btn svg {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px;
+    min-height: 24px;
+    stroke-width: 1.5;
+    flex-shrink: 0;
+  }
+
+  /* Tooltips */
+  [data-tooltip] {
+    position: relative;
+  }
+
+  [data-tooltip]::before,
+  [data-tooltip]::after {
+    position: absolute;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  [data-tooltip]::before {
+    content: attr(data-tooltip);
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    white-space: nowrap;
+    border-radius: 6px;
+    background: #1e293b;
+    color: #f1f5f9;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  [data-tooltip]::after {
+    content: '';
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #1e293b;
+  }
+
+  [data-tooltip]:hover::before,
+  [data-tooltip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Modais */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 100;
+    padding: 1rem;
+  }
+
+  .modal-overlay.active {
+    display: flex;
+  }
+
+  .modal-content {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: min(500px, 100%);
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  [data-theme="dark"] .modal-content {
+    background: #1e293b;
+  }
+
+  [data-theme="light"] .modal-content {
+    background: #ffffff;
+  }
+
+  .modal-content.wide {
+    width: min(720px, 100%);
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .modal-header h3 svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 1.5;
+  }
+
+  .modal-subtitle {
+    margin: 0.25rem 0 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .modal-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: rgba(148, 163, 184, 0.15);
+    border-radius: 10px;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .modal-close:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+
+  .modal-close svg {
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px;
+    min-height: 26px;
+    stroke-width: 2;
+    flex-shrink: 0;
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+  }
+
+  .modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-group label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .form-group input,
+  .form-group select {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    color: var(--text);
+    transition: all 0.2s ease;
+    height: 48px;
+    box-sizing: border-box;
+  }
+
+  [data-theme="dark"] .form-group input,
+  [data-theme="dark"] .form-group select {
+    background: #0f172a;
+  }
+
+  [data-theme="light"] .form-group input,
+  [data-theme="light"] .form-group select {
+    background: #ffffff;
+    border-color: #e2e8f0;
+  }
+
+  .form-group input:focus,
+  .form-group select:focus {
+    outline: none;
+    border-color: rgba(37, 99, 235, 0.6);
+    box-shadow: 0 0 0 4px var(--focus);
+  }
+
+  .form-group small {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn-cancel {
+    padding: 0.65rem 1.25rem;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-cancel:hover {
+    background: rgba(148, 163, 184, 0.2);
+  }
+
+  .btn-submit {
+    padding: 0.65rem 1.25rem;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-submit:hover {
+    opacity: 0.9;
+  }
+
+  .btn-submit.danger {
+    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+  }
+
+  /* Seção de Tokens */
+  .tokens-section {
+    margin-top: 1.5rem;
+  }
+
+  .tokens-section h4 {
+    margin: 0 0 0.75rem;
+    font-size: 0.95rem;
+    color: var(--text);
+  }
+
+  .tokens-list {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .tokens-list-empty {
+    padding: 1rem;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  .token-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .token-row:last-child {
+    border-bottom: none;
+  }
+
+  .token-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .token-name {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .token-meta {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .new-token-form {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .token-generated {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: 8px;
+  }
+
+  .token-generated p {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .token-value-container {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .token-value {
+    flex: 1;
+    padding: 0.5rem;
+    background: rgba(15, 23, 42, 0.1);
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 0.85rem;
+    word-break: break-all;
+    color: var(--text);
+  }
+
+  .btn-copy {
+    padding: 0.5rem 0.75rem;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .btn-copy:hover {
+    background: rgba(148, 163, 184, 0.2);
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    color: var(--muted);
+  }
+  /* Suceso Banner: Novo Usuário */
+  .new-user-banner {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    animation: slideDown 0.3s ease-out;
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .new-user-banner-content {
+    flex: 1;
+  }
+
+  .new-user-banner-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    color: #22c55e;
+  }
+
+  .new-user-banner-header strong {
+    font-size: 1.1rem;
+  }
+
+  .new-user-banner p {
+    margin: 0 0 1rem;
+    color: var(--text);
+    font-size: 0.95rem;
+  }
+
+  .new-user-banner .token-display {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(15, 23, 42, 0.1);
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    max-width: fit-content;
+  }
+
+  .new-user-banner code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--text);
+    word-break: break-all;
+  }
+
+  .new-user-banner .btn-copy {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.8rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .new-user-banner .btn-copy:hover {
+    background: var(--border);
+  }
+
+  .new-user-banner small {
+    display: block;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+
+  .banner-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+
+  .banner-close:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+  }
+</style>
+
+<div class="users-container">
+  {{if index .Data "NewUserToken"}}
+  <div class="new-user-banner" id="newUserBanner">
+    <div class="new-user-banner-content">
+      <div class="new-user-banner-header">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        <strong>Usuário criado com sucesso!</strong>
+      </div>
+      <p>O usuário <strong>{{index .Data "NewUserEmail"}}</strong> foi criado. Copie o token de API abaixo para acesso inicial:</p>
+      <div class="token-display">
+        <code>{{index .Data "NewUserToken"}}</code>
+        <button onclick="copyToClipboard('{{index .Data "NewUserToken"}}', this)" class="btn-copy">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          Copiar
+        </button>
+      </div>
+      <small>Este token não será exibido novamente em texto plano. Guarde-o em segurança.</small>
+    </div>
+    <button class="banner-close" onclick="document.getElementById('newUserBanner').remove()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
+  </div>
+  {{end}}
+
+  <div class="users-header">
+    <h1>
+      <svg class="users-header-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" />
+        <path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        <path d="M21 21v-2a4 4 0 0 0 -3 -3.85" />
+      </svg>
+      Usuários
+    </h1>
+    <button type="button" class="btn-add-user" id="btnOpenCreateUser">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 5l0 14" />
+        <path d="M5 12l14 0" />
+      </svg>
+      Adicionar Usuário
+    </button>
+  </div>
+
+  <div class="users-table-container">
+    <table class="users-table">
+      <thead>
+        <tr>
+          <th>E-mail</th>
+          <th>Papel</th>
+          <th>Criado em</th>
+          <th style="text-align: right;">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range index .Data "Users"}}
+        <tr>
+          <td class="user-email">{{.Email}}</td>
+          <td>
+            <span class="role-badge {{if eq .Role "admin"}}admin{{else}}user{{end}}">
+              {{if eq .Role "admin"}}Admin{{else}}Usuário{{end}}
+            </span>
+          </td>
+          <td>{{formatTime .CreatedAt}}</td>
+          <td>
+            <div class="action-buttons" style="justify-content: flex-end;">
+              <button type="button" class="action-btn btn-change-password" data-tooltip="Alterar senha" data-user-id="{{.ID}}" data-user-email="{{.Email}}">
+                <svg width="24" height="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16.555 3.843l3.602 3.602a2.877 2.877 0 0 1 0 4.069l-2.643 2.643a2.877 2.877 0 0 1 -4.069 0l-3.602 -3.602a2.877 2.877 0 0 1 0 -4.069l2.643 -2.643a2.877 2.877 0 0 1 4.069 0z" />
+                  <path d="M14.5 7.5l2 2" />
+                  <path d="M3 21l3.5 -3.5" />
+                  <path d="M6.5 17.5l-3 -3" />
+                </svg>
+              </button>
+              <button type="button" class="action-btn user-token-btn" data-tooltip="Gerenciar tokens" data-user-id="{{.ID}}" data-user-email="{{.Email}}">
+                <svg width="24" height="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12.5 21h-6.5a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v5" />
+                  <path d="M16 3v4" />
+                  <path d="M8 3v4" />
+                  <path d="M4 11h16" />
+                  <path d="M18.42 15.61a2.1 2.1 0 1 1 2.97 2.97l-3.39 3.42h-3v-3l3.42 -3.39z" />
+                </svg>
+              </button>
+              {{$currentUserID := index $.Data "CurrentUserID"}}
+              {{$adminCount := index $.Data "AdminCount"}}
+              {{$canDelete := true}}
+              {{if eq .ID $currentUserID}}{{$canDelete = false}}{{end}}
+              {{if and (eq .Role "admin") (le $adminCount 1)}}{{$canDelete = false}}{{end}}
+              {{if $canDelete}}
+              <form method="post" action="/dashboard/users/{{.ID}}/delete" style="margin:0;" class="delete-user-form" data-user-email="{{.Email}}">
+                <button type="submit" class="action-btn danger" data-tooltip="Remover usuário">
+                  <svg width="24" height="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 7l16 0" />
+                    <path d="M10 11l0 6" />
+                    <path d="M14 11l0 6" />
+                    <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" />
+                    <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" />
+                  </svg>
+                </button>
+              </form>
+              {{end}}
+            </div>
+          </td>
+        </tr>
+        {{else}}
+        <tr>
+          <td colspan="4" class="empty-state">Nenhum usuário cadastrado.</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Criar Usuário -->
+<div class="modal-overlay" id="createUserModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0" />
+          <path d="M16 19h6" />
+          <path d="M19 16v6" />
+          <path d="M6 21v-2a4 4 0 0 1 4 -4h4" />
+        </svg>
+        Novo Usuário
+      </h3>
+      <button type="button" class="modal-close" id="closeCreateUserModal">
+        <svg width="26" height="26" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6l-12 12" />
+          <path d="M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <form method="post" action="/dashboard/users">
+      <div class="modal-body">
+        <div class="modal-form">
+          <div class="form-group">
+            <label for="create-email">E-mail</label>
+            <input type="email" id="create-email" name="email" placeholder="usuario@empresa.com" required>
+          </div>
+          <div class="form-group">
+            <label for="create-password">Senha</label>
+            <input type="password" id="create-password" name="password" placeholder="Mínimo 8 caracteres" minlength="8" required>
+          </div>
+          <div class="form-group">
+            <label for="create-role">Papel</label>
+            <select id="create-role" name="role" required>
+              <option value="user">Usuário</option>
+              <option value="admin">Administrador</option>
+            </select>
+            <small>Admin: acesso total e todas as instâncias. Usuário: acesso limitado.</small>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" id="cancelCreateUser">Cancelar</button>
+        <button type="submit" class="btn-submit">Criar Usuário</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Alterar Senha -->
+<div class="modal-overlay" id="changePasswordModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div>
+        <h3>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16.555 3.843l3.602 3.602a2.877 2.877 0 0 1 0 4.069l-2.643 2.643a2.877 2.877 0 0 1 -4.069 0l-3.602 -3.602a2.877 2.877 0 0 1 0 -4.069l2.643 -2.643a2.877 2.877 0 0 1 4.069 0z" />
+            <path d="M14.5 7.5l2 2" />
+            <path d="M3 21l3.5 -3.5" />
+            <path d="M6.5 17.5l-3 -3" />
+          </svg>
+          Alterar Senha
+        </h3>
+        <p class="modal-subtitle" id="passwordModalSubtitle"></p>
+      </div>
+      <button type="button" class="modal-close" id="closePasswordModal">
+        <svg width="26" height="26" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6l-12 12" />
+          <path d="M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <form id="changePasswordForm" method="post">
+      <div class="modal-body">
+        <div class="modal-form">
+          <div class="form-group">
+            <label for="new-password">Nova Senha</label>
+            <input type="password" id="new-password" name="password" placeholder="Mínimo 8 caracteres" minlength="8" required>
+          </div>
+          <div class="form-group">
+            <label for="confirm-password">Confirmar Senha</label>
+            <input type="password" id="confirm-password" placeholder="Digite novamente" minlength="8" required>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" id="cancelPasswordChange">Cancelar</button>
+        <button type="submit" class="btn-submit">Alterar Senha</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Tokens -->
+<div class="modal-overlay" id="userTokenModal">
+  <div class="modal-content wide">
+    <div class="modal-header">
+      <div>
+        <h3>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12.5 21h-6.5a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v5" />
+            <path d="M16 3v4" />
+            <path d="M8 3v4" />
+            <path d="M4 11h16" />
+            <path d="M18.42 15.61a2.1 2.1 0 1 1 2.97 2.97l-3.39 3.42h-3v-3l3.42 -3.39z" />
+          </svg>
+          Tokens de API
+        </h3>
+        <p class="modal-subtitle" id="userTokenModalSubtitle"></p>
+      </div>
+      <button type="button" class="modal-close" id="closeUserTokenModal">
+        <svg width="26" height="26" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6l-12 12" />
+          <path d="M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="tokens-section">
+        <h4>Tokens Existentes</h4>
+        <div id="userTokenList" class="tokens-list">
+          <div class="tokens-list-empty">Carregando...</div>
+        </div>
+      </div>
+
+      <div class="new-token-form">
+        <h4>Criar Novo Token</h4>
+        <form id="userTokenCreateForm" class="modal-form" style="margin-top: 0.75rem;">
+          <input type="hidden" name="userId" id="userTokenUserId">
+          <div class="form-group">
+            <label for="new-user-token-name">Nome do Token</label>
+            <input type="text" id="new-user-token-name" name="name" placeholder="Ex: Integração CRM" required>
+            <small>Use um nome descritivo para identificar o uso do token.</small>
+          </div>
+          <div style="display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn-submit">Gerar Token</button>
+          </div>
+        </form>
+        <div id="userTokenGenerated" class="token-generated" style="display: none;">
+          <p>Copie o token abaixo. Ele não será exibido novamente.</p>
+          <div class="token-value-container">
+            <code id="userTokenValue" class="token-value"></code>
+            <button type="button" id="copyUserTokenValue" class="btn-copy">Copiar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Utilitário global para copiar texto
+window.copyToClipboard = async function(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text);
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      Copiado!
+    `;
+    btn.style.borderColor = '#22c55e';
+    btn.style.color = '#22c55e';
+    setTimeout(() => {
+      btn.innerHTML = originalContent;
+      btn.style.borderColor = '';
+      btn.style.color = '';
+    }, 2000);
+  } catch (err) {
+    console.error('Falha ao copiar:', err);
+  }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Utilitários de Modal
+  function openModal(modal) {
+    if (modal) modal.classList.add('active');
+  }
+  function closeModal(modal) {
+    if (modal) modal.classList.remove('active');
+  }
+
+  // Modal: Criar Usuário
+  const createUserModal = document.getElementById('createUserModal');
+  const btnOpenCreateUser = document.getElementById('btnOpenCreateUser');
+  const closeCreateUserModal = document.getElementById('closeCreateUserModal');
+  const cancelCreateUser = document.getElementById('cancelCreateUser');
+
+  if (btnOpenCreateUser) {
+    btnOpenCreateUser.addEventListener('click', () => openModal(createUserModal));
+  }
+  if (closeCreateUserModal) {
+    closeCreateUserModal.addEventListener('click', () => closeModal(createUserModal));
+  }
+  if (cancelCreateUser) {
+    cancelCreateUser.addEventListener('click', () => closeModal(createUserModal));
+  }
+  if (createUserModal) {
+    createUserModal.addEventListener('click', (e) => {
+      if (e.target === createUserModal) closeModal(createUserModal);
+    });
+  }
+
+  // Modal: Alterar Senha
+  const changePasswordModal = document.getElementById('changePasswordModal');
+  const changePasswordForm = document.getElementById('changePasswordForm');
+  const closePasswordModal = document.getElementById('closePasswordModal');
+  const cancelPasswordChange = document.getElementById('cancelPasswordChange');
+  const passwordModalSubtitle = document.getElementById('passwordModalSubtitle');
+  const passwordButtons = document.querySelectorAll('.btn-change-password');
+
+  passwordButtons.forEach(btn => {
+    btn.addEventListener('click', function() {
+      const userId = this.getAttribute('data-user-id');
+      const email = this.getAttribute('data-user-email') || '';
+      if (!userId) return;
+      changePasswordForm.action = `/dashboard/users/${userId}/password`;
+      passwordModalSubtitle.textContent = email;
+      openModal(changePasswordModal);
+    });
+  });
+
+  if (closePasswordModal) {
+    closePasswordModal.addEventListener('click', () => closeModal(changePasswordModal));
+  }
+  if (cancelPasswordChange) {
+    cancelPasswordChange.addEventListener('click', () => closeModal(changePasswordModal));
+  }
+  if (changePasswordModal) {
+    changePasswordModal.addEventListener('click', (e) => {
+      if (e.target === changePasswordModal) closeModal(changePasswordModal);
+    });
+  }
+
+  // Validação de senha
+  if (changePasswordForm) {
+    changePasswordForm.addEventListener('submit', function(e) {
+      const newPass = document.getElementById('new-password').value;
+      const confirmPass = document.getElementById('confirm-password').value;
+      if (newPass !== confirmPass) {
+        e.preventDefault();
+        alert('As senhas não coincidem.');
+      }
+    });
+  }
+
+  // Modal: Tokens
+  const tokenModal = document.getElementById('userTokenModal');
+  const closeTokenModal = document.getElementById('closeUserTokenModal');
+  const tokenButtons = document.querySelectorAll('.user-token-btn');
+  const tokenList = document.getElementById('userTokenList');
+  const tokenForm = document.getElementById('userTokenCreateForm');
+  const userIdInput = document.getElementById('userTokenUserId');
+  const tokenSubtitle = document.getElementById('userTokenModalSubtitle');
+  const generatedBox = document.getElementById('userTokenGenerated');
+  const tokenValueEl = document.getElementById('userTokenValue');
+  const copyBtn = document.getElementById('copyUserTokenValue');
+  let currentUserId = '';
+
+  function resetTokenModal() {
+    tokenList.innerHTML = '<div class="tokens-list-empty">Carregando...</div>';
+    generatedBox.style.display = 'none';
+    tokenValueEl.textContent = '';
+    if (tokenForm) tokenForm.reset();
+  }
+
+  async function fetchTokens() {
+    if (!currentUserId) return;
+    tokenList.innerHTML = '<div class="tokens-list-empty">Carregando...</div>';
+    try {
+      const resp = await fetch(`/dashboard/users/${currentUserId}/tokens`, { credentials: 'same-origin' });
+      if (!resp.ok) throw new Error('falha ao buscar tokens');
+      const data = await resp.json();
+      renderTokenList(Array.isArray(data.tokens) ? data.tokens : []);
+    } catch (err) {
+      console.error(err);
+      tokenList.innerHTML = '<div class="tokens-list-empty" style="color:#f87171;">Erro ao carregar tokens.</div>';
+    }
+  }
+
+  function renderTokenList(tokens) {
+    if (!tokens.length) {
+      tokenList.innerHTML = '<div class="tokens-list-empty">Nenhum token criado.</div>';
+      return;
+    }
+    const rows = tokens.map(token => {
+      const created = token.createdAt ? new Date(token.createdAt).toLocaleString('pt-BR') : '—';
+      const lastUsed = token.lastUsedAt ? new Date(token.lastUsedAt).toLocaleString('pt-BR') : 'Nunca';
+      return `
+        <div class="token-row">
+          <div class="token-info">
+            <span class="token-name">${token.name || '-'}</span>
+            <span class="token-meta">Criado: ${created} · Último uso: ${lastUsed}</span>
+          </div>
+          <button type="button" class="action-btn danger" data-token-id="${token.id}" data-action="delete" data-tooltip="Revogar token">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+              <path d="M4 7l16 0" />
+              <path d="M10 11l0 6" />
+              <path d="M14 11l0 6" />
+              <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" />
+              <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" />
+            </svg>
+          </button>
+        </div>
+      `;
+    }).join('');
+    tokenList.innerHTML = rows;
+
+    tokenList.querySelectorAll('button[data-action="delete"]').forEach(btn => {
+      btn.addEventListener('click', async function() {
+        const tokenId = this.getAttribute('data-token-id');
+        if (!tokenId) return;
+        if (!confirm('Revogar este token?')) return;
+        try {
+          const resp = await fetch(`/dashboard/users/${currentUserId}/tokens/${tokenId}/delete`, {
+            method: 'POST',
+            credentials: 'same-origin'
+          });
+          if (!resp.ok) throw new Error('falha ao revogar token');
+          fetchTokens();
+        } catch (err) {
+          console.error(err);
+          alert('Erro ao revogar token.');
+        }
+      });
+    });
+  }
+
+  tokenButtons.forEach(btn => {
+    btn.addEventListener('click', function() {
+      currentUserId = this.getAttribute('data-user-id');
+      const email = this.getAttribute('data-user-email') || '';
+      if (!currentUserId) return;
+      userIdInput.value = currentUserId;
+      tokenSubtitle.textContent = email;
+      resetTokenModal();
+      openModal(tokenModal);
+      fetchTokens();
+    });
+  });
+
+  if (closeTokenModal) {
+    closeTokenModal.addEventListener('click', () => {
+      closeModal(tokenModal);
+      resetTokenModal();
+    });
+  }
+  if (tokenModal) {
+    tokenModal.addEventListener('click', (e) => {
+      if (e.target === tokenModal) {
+        closeModal(tokenModal);
+        resetTokenModal();
+      }
+    });
+  }
+
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async function() {
+      const value = tokenValueEl.textContent.trim();
+      if (!value) return;
+      try {
+        await navigator.clipboard.writeText(value);
+        copyBtn.textContent = 'Copiado!';
+        setTimeout(() => copyBtn.textContent = 'Copiar', 1500);
+      } catch (err) {
+        console.error(err);
+        alert('Não foi possível copiar o token.');
+      }
+    });
+  }
+
+  // Fechar modais com ESC
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      closeModal(createUserModal);
+      closeModal(changePasswordModal);
+      closeModal(tokenModal);
+      resetTokenModal();
+    }
+  });
+
+  // Handlers para modal de confirmação customizado
+  // Remover usuário
+  const deleteUserForms = document.querySelectorAll('.delete-user-form');
+  deleteUserForms.forEach(form => {
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const email = this.getAttribute('data-user-email') || 'este usuário';
+      const confirmed = await customConfirm(
+        `Tem certeza que deseja remover ${email}?`,
+        'Remover usuário',
+        { danger: true, confirmText: 'Remover' }
+      );
+      if (confirmed) {
+        this.submit();
+      }
+    });
+  });
+
+  // Validação de senha com alert customizado
+  if (changePasswordForm) {
+    const originalSubmit = changePasswordForm.onsubmit;
+    changePasswordForm.onsubmit = null;
+    changePasswordForm.addEventListener('submit', async function(e) {
+      const newPass = document.getElementById('new-password').value;
+      const confirmPass = document.getElementById('confirm-password').value;
+      if (newPass !== confirmPass) {
+        e.preventDefault();
+        await customAlert('As senhas não coincidem.', 'Erro de validação');
+      }
+    });
+  }
+
+  // Substituir confirms e alerts na seção de tokens
+  const originalRenderTokenList = renderTokenList;
+  renderTokenList = function(tokens) {
+    if (!tokens.length) {
+      tokenList.innerHTML = '<div class="tokens-list-empty">Nenhum token criado.</div>';
+      return;
+    }
+    const rows = tokens.map(token => {
+      const created = token.createdAt ? new Date(token.createdAt).toLocaleString('pt-BR') : '—';
+      const lastUsed = token.lastUsedAt ? new Date(token.lastUsedAt).toLocaleString('pt-BR') : 'Nunca';
+      return `
+        <div class="token-row">
+          <div class="token-info">
+            <span class="token-name">${token.name || '-'}</span>
+            <span class="token-meta">Criado: ${created} · Último uso: ${lastUsed}</span>
+          </div>
+          <button type="button" class="action-btn danger" data-token-id="${token.id}" data-action="delete" data-tooltip="Revogar token">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+              <path d="M4 7l16 0" />
+              <path d="M10 11l0 6" />
+              <path d="M14 11l0 6" />
+              <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" />
+              <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" />
+            </svg>
+          </button>
+        </div>
+      `;
+    }).join('');
+    tokenList.innerHTML = rows;
+
+    tokenList.querySelectorAll('button[data-action="delete"]').forEach(btn => {
+      btn.addEventListener('click', async function() {
+        const tokenId = this.getAttribute('data-token-id');
+        if (!tokenId) return;
+        const confirmed = await customConfirm('Revogar este token?', 'Revogar token', { danger: true, confirmText: 'Revogar' });
+        if (!confirmed) return;
+        try {
+          const resp = await fetch(`/dashboard/users/${currentUserId}/tokens/${tokenId}/delete`, {
+            method: 'POST',
+            credentials: 'same-origin'
+          });
+          if (!resp.ok) throw new Error('falha ao revogar token');
+          fetchTokens();
+        } catch (err) {
+          console.error(err);
+          await customAlert('Erro ao revogar token.', 'Erro');
+        }
+      });
+    });
+  };
+
+  // Substituir alert no token form (mantém único handler para evitar chamadas duplicadas)
+  if (tokenForm) {
+    const originalTokenSubmit = tokenForm.onsubmit;
+    tokenForm.onsubmit = null;
+    tokenForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const nameInput = document.getElementById('new-user-token-name');
+      if (!nameInput || !currentUserId) return;
+      const name = nameInput.value.trim();
+      if (!name) return;
+      try {
+        const body = new URLSearchParams();
+        body.append('name', name);
+        const resp = await fetch(`/dashboard/users/${currentUserId}/tokens`, {
+          method: 'POST',
+          body,
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+        if (!resp.ok) throw new Error('falha ao gerar token');
+        const data = await resp.json();
+        if (data.token) {
+          tokenValueEl.textContent = data.token;
+          generatedBox.style.display = 'block';
+        }
+        fetchTokens();
+        tokenForm.reset();
+      } catch (err) {
+        console.error(err);
+        await customAlert('Erro ao gerar token.', 'Erro');
+      }
+    });
+  }
+
+  // Substituir alert no botão de copiar
+  if (copyBtn) {
+    copyBtn.onclick = null;
+    copyBtn.addEventListener('click', async function() {
+      const value = tokenValueEl.textContent.trim();
+      if (!value) return;
+      try {
+        await navigator.clipboard.writeText(value);
+        copyBtn.textContent = 'Copiado!';
+        setTimeout(() => copyBtn.textContent = 'Copiar', 1500);
+      } catch (err) {
+        console.error(err);
+        await customAlert('Não foi possível copiar o token.', 'Erro');
+      }
+    });
+  }
+});
+</script>
+{{end}}

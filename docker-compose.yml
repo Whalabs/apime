@@ -1,0 +1,39 @@
+services:
+  api:
+    build: .
+    container_name: apime-api
+    command: sh -c "./migrate -with-seeds && ./api"
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - wa_sessions:/app/sessions
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15
+    container_name: apime-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-apime}
+      POSTGRES_USER: ${DB_USER:-apime}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-apime}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    container_name: apime-redis
+    volumes:
+      - redis:/data
+    ports:
+      - "6379:6379"
+
+volumes:
+  wa_sessions:
+  postgres:
+  redis:

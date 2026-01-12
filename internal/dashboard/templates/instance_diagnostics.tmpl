@@ -1,0 +1,143 @@
+{{define "instance_diagnostics_content"}}
+<style>
+  [data-tooltip] { position: relative; }
+  [data-tooltip]:before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-8px);
+    padding: 0.4rem 0.6rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: 0.2s;
+    box-shadow: var(--shadow);
+    z-index: 20;
+  }
+  [data-tooltip]:hover:before { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; }
+  .code-sm { font-size: 0.85rem; font-family: monospace; word-break: break-all; }
+</style>
+
+<div style="display:flex; flex-direction:column; gap:1.5rem;">
+  
+  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
+    <h1>Diagnóstico - {{.Data.Instance.Name}}</h1>
+    <div class="actions">
+       <a href="/dashboard/instances/{{.Data.Instance.ID}}/qr" class="icon-btn" data-tooltip="Gerar QR Code">
+         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><path d="M14 17h6" /><path d="M14 14v3" /><path d="M17 14v3" /></svg>
+       </a>
+       <a href="/dashboard/instances/{{.Data.Instance.ID}}/diagnostics" class="icon-btn" data-tooltip="Atualizar Diagnóstico">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" /><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" /></svg>
+       </a>
+       <a href="/dashboard" class="icon-btn" data-tooltip="Voltar">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="M5 12l6 6" /><path d="M5 12l6 -6" /></svg>
+       </a>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <!-- INFO CARD -->
+    <div class="card">
+      <h3>Informações da Instância</h3>
+      <table>
+        <tr><th>ID</th><td><code class="code-sm">{{.Data.Instance.ID}}</code></td></tr>
+        <tr><th>Nome</th><td>{{.Data.Instance.Name}}</td></tr>
+        <tr><th>Status</th><td><span class="status-badge {{statusBadge .Data.Instance.Status}}">{{.Data.Instance.Status}}</span></td></tr>
+        <tr><th>Criado em</th><td>{{formatTime .Data.Instance.CreatedAt}}</td></tr>
+        <tr><th>Atualizado</th><td>{{formatTime .Data.Instance.UpdatedAt}}</td></tr>
+      </table>
+    </div>
+
+    <!-- DIAGNOSTICS CARD -->
+    {{if .Data.Diagnostics}}
+    {{$diag := .Data.Diagnostics}}
+    <div class="card">
+      <h3>Diagnóstico do WhatsMeow</h3>
+      <table>
+        <tr>
+          <th>Client Memória</th>
+          <td>
+            {{if $diag.HasClientInMemory}}<span class="badge-yes"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Sim</span>
+            {{else}}<span class="badge-no"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Não</span>{{end}}
+          </td>
+        </tr>
+        <tr>
+          <th>Client Logado</th>
+          <td>
+            {{if $diag.IsLoggedIn}}<span class="badge-yes"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Sim</span>
+            {{else}}<span class="badge-no"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Não</span>{{end}}
+          </td>
+        </tr>
+        <tr>
+          <th>SQLite Existe</th>
+          <td>
+            {{if $diag.HasSQLiteFile}}<span class="badge-yes"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Sim</span>
+            {{else}}<span class="badge-no"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Não</span>{{end}}
+          </td>
+        </tr>
+        {{if $diag.HasSQLiteFile}}
+        <tr><th>Caminho</th><td><code class="code-sm">{{$diag.SQLiteFilePath}}</code></td></tr>
+        <tr><th>Tamanho</th><td>{{printf "%.2f KB" (div $diag.SQLiteFileSize 1024.0)}}</td></tr>
+        {{end}}
+        {{if $diag.LastError}}
+        <tr><th>Erro</th><td style="color:#ef4444;"><code class="code-sm">{{$diag.LastError}}</code></td></tr>
+        {{end}}
+      </table>
+    </div>
+    {{else}}
+    <div class="card">
+        <h3>Diagnóstico</h3>
+        <p style="color:var(--muted);">Indisponível</p>
+    </div>
+    {{end}}
+  </div>
+
+  <!-- ANALYSIS CARD -->
+  <div class="card">
+    <h3>Análise</h3>
+    {{if .Data.Diagnostics}}
+      {{$diag := .Data.Diagnostics}}
+      {{if and $diag.HasClientInMemory $diag.IsLoggedIn}}
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+          <span class="badge-yes">Status OK</span>
+          <span>Cliente está em memória e logado corretamente.</span>
+        </div>
+      {{else if $diag.HasSQLiteFile}}
+        {{if $diag.HasDeviceStore}}
+          {{if $diag.DeviceJID}}
+            <div style="display:flex;align-items:flex-start;gap:0.75rem;flex-direction:column;">
+               <div style="display:flex;align-items:center;gap:0.5rem;">
+                <span class="status-badge status-pending">Atenção</span>
+                <span>Sessão existe mas não está ativa em memória.</span>
+               </div>
+               <p style="margin:0; color:var(--muted); font-size:0.9rem;">O sistema deve restaurar automaticamente. Se persistir, reinicie a instância.</p>
+            </div>
+          {{else}}
+             <div style="display:flex;align-items:center;gap:0.75rem;">
+                <span class="badge-no">Problema</span>
+                <span>Sessão existe mas sem login (JID). Gere um novo QR.</span>
+             </div>
+          {{end}}
+        {{else}}
+           <span class="badge-no">Erro Crítico</span> <span>Device Store corrompido.</span>
+        {{end}}
+      {{else}}
+         <div style="display:flex;align-items:center;gap:0.75rem;">
+            <span class="badge-no">Sem Sessão</span>
+            <span>Nenhuma sessão encontrada. Conecte pelo QR Code.</span>
+         </div>
+      {{end}}
+    {{else}}
+      <p style="color:var(--muted);">Dados insuficientes.</p>
+    {{end}}
+  </div>
+
+</div>
+{{end}}

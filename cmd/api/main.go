@@ -1,0 +1,234 @@
+package main
+
+import (
+	"context"
+	"log"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/open-apime/apime/internal/api/handler"
+	"github.com/open-apime/apime/internal/app"
+	"github.com/open-apime/apime/internal/config"
+	"github.com/open-apime/apime/internal/dashboard"
+	"github.com/open-apime/apime/internal/logger"
+	"github.com/open-apime/apime/internal/server"
+	"github.com/open-apime/apime/internal/service/api_token"
+	"github.com/open-apime/apime/internal/service/auth"
+	device_config "github.com/open-apime/apime/internal/service/device_config"
+	"github.com/open-apime/apime/internal/service/instance"
+	"github.com/open-apime/apime/internal/service/message"
+	"github.com/open-apime/apime/internal/service/user"
+	"github.com/open-apime/apime/internal/session/whatsmeow"
+	"github.com/open-apime/apime/internal/storage"
+	"github.com/open-apime/apime/internal/storage/media"
+	"github.com/open-apime/apime/internal/storage/model"
+	"github.com/open-apime/apime/internal/webhook"
+	"github.com/open-apime/apime/internal/webhook/delivery"
+)
+
+// instanceCheckerAdapter adapta o repositório de instâncias para a interface InstanceChecker
+type instanceCheckerAdapter struct {
+	repo storage.InstanceRepository
+}
+
+func (a *instanceCheckerAdapter) HasWebhook(ctx context.Context, instanceID string) bool {
+	inst, err := a.repo.GetByID(ctx, instanceID)
+	if err != nil {
+		return false
+	}
+	return inst.WebhookURL != ""
+}
+
+func main() {
+	cfg := config.Load()
+
+	logr, err := logger.New(cfg.App.Env, cfg.Log.Level)
+	if err != nil {
+		log.Fatalf("logger: %v", err)
+	}
+	defer logr.Sync()
+
+	logr.Info("iniciando aplicação",
+		zap.String("env", cfg.App.Env),
+		zap.String("log_level", cfg.Log.Level),
+		zap.String("port", cfg.App.Port),
+		zap.String("wa_session_dir", cfg.WhatsApp.SessionDir),
+	)
+
+	repos, err := storage.NewRepositories(cfg, logr)
+	if err != nil {
+		log.Fatalf("storage: %v", err)
+	}
+
+	// Inicializar session manager do WhatsApp
+	sessionManager := whatsmeow.NewManager(logr, cfg.WhatsApp.SessionKeyEnc, cfg.WhatsApp.SessionDir, repos.DeviceConfig, repos.Instance)
+
+	instanceService := instance.NewServiceWithSessionMessagesAndEventLogs(repos.Instance, repos.Message, repos.EventLog, sessionManager)
+
+	// Configurar callback para atualizar status quando conectar/desconectar
+	sessionManager.SetStatusChangeCallback(func(instanceID string, status string) {
+		ctx := context.Background()
+		var instanceStatus model.InstanceStatus
+		switch status {
+		case "active":
+			instanceStatus = model.InstanceStatusActive
+		case "error":
+			instanceStatus = model.InstanceStatusError
+		default:
+			instanceStatus = model.InstanceStatusPending
+		}
+		if _, err := instanceService.UpdateStatus(ctx, instanceID, instanceStatus); err != nil {
+			logr.Warn("erro ao atualizar status da instância", zap.String("instance_id", instanceID), zap.Error(err))
+		}
+	})
+
+	// Inicializar storage de mídia temporária (TTL de 2 horas)
+	mediaDir := filepath.Join(cfg.WhatsApp.SessionDir, "media")
+	mediaStorage, err := media.NewStorage(mediaDir, 2*time.Hour, logr)
+	if err != nil {
+		log.Fatalf("media storage: %v", err)
+	}
+	logr.Info("media storage inicializado", zap.String("dir", mediaDir), zap.Duration("ttl", 2*time.Hour))
+
+	// Criar media handler
+	mediaHandler := handler.NewMediaHandler(mediaStorage)
+
+	// Configurar sistema de webhooks
+	logr.Info("inicializando sistema de webhooks")
+	instanceWebhookChecker := &instanceCheckerAdapter{repo: repos.Instance}
+	eventHandler := webhook.NewEventHandler(repos.WebhookQueue, logr, mediaStorage, cfg.App.BaseURL, instanceWebhookChecker)
+	sessionManager.SetEventHandler(eventHandler)
+	logr.Info("event handler configurado")
+
+	// Iniciar worker de webhooks
+	webhookDelivery := delivery.NewDelivery(logr, 3)
+	webhookWorker := webhook.NewWorker(repos.WebhookQueue, repos.Instance, webhookDelivery, logr)
+	go webhookWorker.Start(context.Background())
+	logr.Info("webhook worker iniciado")
+
+	// Restaurar todas as sessões que têm arquivo SQLite na inicialização
+	logr.Info("restaurando sessões...")
+	instances, err := instanceService.List(context.Background())
+	if err == nil {
+		// Restaurar TODAS as instâncias que existem no banco
+		// O WhatsMeow vai verificar se há arquivo SQLite válido
+		var allInstanceIDs []string
+		for _, inst := range instances {
+			allInstanceIDs = append(allInstanceIDs, inst.ID)
+		}
+		if len(allInstanceIDs) > 0 {
+			logr.Info("tentando restaurar sessões",
+				zap.Int("total", len(allInstanceIDs)),
+			)
+			sessionManager.RestoreAllSessions(context.Background(), allInstanceIDs)
+			// Aguardar um pouco para as restaurações iniciarem
+			time.Sleep(3 * time.Second)
+		} else {
+			logr.Info("nenhuma instância encontrada para restaurar")
+		}
+	} else {
+		logr.Warn("erro ao listar instâncias para restauração", zap.Error(err))
+	}
+
+	logr.Debug("inicializando serviços")
+	messageService := message.NewServiceWithSession(repos.Message, sessionManager, repos.Instance)
+	apiTokenService := api_token.NewService(repos.APIToken)
+	userService := user.NewService(repos.User, apiTokenService, instanceService)
+	authService := auth.NewService(cfg.JWT.Secret, cfg.JWT.ExpHours, repos.User)
+	deviceConfigService := device_config.NewService(repos.DeviceConfig)
+	logr.Debug("serviços inicializados")
+
+	instanceHandler := handler.NewInstanceHandlerWithSession(instanceService, logr, sessionManager)
+	messageHandler := handler.NewMessageHandler(messageService)
+	whatsAppHandler := handler.NewWhatsAppHandler(sessionManager)
+	authHandler := handler.NewAuthHandler(authService)
+	apiTokenHandler := handler.NewAPITokenHandler(apiTokenService)
+	userHandler := handler.NewUserHandler(userService)
+	healthHandler := handler.NewHealthHandler()
+
+	router := server.NewRouter(server.Options{
+		Env:             cfg.App.Env,
+		AuthSecret:      cfg.JWT.Secret,
+		HTMLTemplate:    dashboard.HTMLTemplate(),
+		InstanceHandler: instanceHandler,
+		MessageHandler:  messageHandler,
+		WhatsAppHandler: whatsAppHandler,
+		AuthHandler:     authHandler,
+		APITokenHandler: apiTokenHandler,
+		APITokenService: apiTokenService,
+		InstanceRepo:    repos.Instance,
+		HealthHandler:   healthHandler,
+		UserHandler:     userHandler,
+		MediaHandler:    mediaHandler,
+	})
+
+	if err := dashboard.Register(router, dashboard.Options{
+		AuthService:         authService,
+		InstanceService:     instanceService,
+		UserService:         userService,
+		APITokenService:     apiTokenService,
+		DeviceConfigService: deviceConfigService,
+		SessionManager:      sessionManager,
+		JWTSecret:           cfg.JWT.Secret,
+		DocsDirectory:       ".",
+		BaseURL:             cfg.App.BaseURL,
+		Logger:              logr,
+		EnableDashboard:     true,
+	}); err != nil {
+
+		log.Fatalf("dashboard: %v", err)
+	}
+
+	logr.Debug("criando aplicação")
+	application := app.New(cfg, logr, router)
+	logr.Info("aplicação criada, iniciando servidor")
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	errCh := make(chan error, 1)
+	go func() {
+		logr.Debug("iniciando goroutine do servidor")
+		if err := application.Run(context.Background()); err != nil {
+			logr.Error("servidor finalizado com erro", zap.Error(err))
+			errCh <- err
+		}
+	}()
+
+	logr.Debug("aguardando sinais de encerramento ou erros do servidor")
+	select {
+	case <-ctx.Done():
+		logr.Info("sinal de encerramento recebido",
+			zap.String("signal", "SIGINT/SIGTERM"),
+		)
+	case err := <-errCh:
+		if err != nil {
+			logr.Error("servidor finalizado com erro", zap.Error(err))
+		} else {
+			logr.Info("servidor finalizado normalmente")
+		}
+	}
+
+	logr.Info("iniciando shutdown graceful")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Fechar conexão Redis
+	if repos.RedisClient != nil {
+		if err := repos.RedisClient.Close(); err != nil {
+			logr.Warn("erro ao fechar conexão Redis", zap.Error(err))
+		} else {
+			logr.Info("conexão Redis fechada")
+		}
+	}
+
+	if err := application.Shutdown(shutdownCtx); err != nil {
+		logr.Error("erro ao encerrar servidor", zap.Error(err))
+	} else {
+		logr.Info("servidor encerrado com sucesso")
+	}
+}

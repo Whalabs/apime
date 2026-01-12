@@ -1,0 +1,25 @@
+# Go
+bin/
+dist/
+tmp/
+coverage.out
+*.test
+build-errors.log
+/api
+
+# Environment
+.env
+.env.local
+.env.development
+.env.production
+!.env.example
+
+# Editors/OS
+.DS_Store
+*.swp
+*.swo
+
+# Data
+data/
+
+/.idea/
