@@ -175,21 +175,24 @@ func main() {
 		RateLimit:       rateLimitOpts,
 	})
 
-	if err := dashboard.Register(router, dashboard.Options{
-		AuthService:         authService,
-		InstanceService:     instanceService,
-		UserService:         userService,
-		APITokenService:     apiTokenService,
-		DeviceConfigService: deviceConfigService,
-		SessionManager:      sessionManager,
-		JWTSecret:           cfg.JWT.Secret,
-		DocsDirectory:       ".",
-		BaseURL:             cfg.App.BaseURL,
-		Logger:              logr,
-		EnableDashboard:     true,
-	}); err != nil {
-
-		log.Fatalf("dashboard: %v", err)
+	if cfg.Dashboard.Enabled {
+		if err := dashboard.Register(router, dashboard.Options{
+			AuthService:         authService,
+			InstanceService:     instanceService,
+			UserService:         userService,
+			APITokenService:     apiTokenService,
+			DeviceConfigService: deviceConfigService,
+			SessionManager:      sessionManager,
+			JWTSecret:           cfg.JWT.Secret,
+			DocsDirectory:       ".",
+			BaseURL:             cfg.App.BaseURL,
+			Logger:              logr,
+			EnableDashboard:     true,
+		}); err != nil {
+			log.Fatalf("dashboard: %v", err)
+		}
+	} else {
+		logr.Info("dashboard desativado via configuração")
 	}
 
 	logr.Debug("criando aplicação")

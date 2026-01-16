@@ -19,6 +19,7 @@ type Config struct {
 	IPRateLimit IPRateLimitConfig
 	WhatsApp   WhatsAppConfig
 	Webhook    WebhookConfig
+	Dashboard  DashboardConfig
 }
 
 type StorageConfig struct {
@@ -88,6 +89,10 @@ type WhatsAppConfig struct {
 
 type WebhookConfig struct {
 	Workers int `env:"WEBHOOK_WORKERS" envDefault:"4"`
+}
+
+type DashboardConfig struct {
+	Enabled bool `env:"DASHBOARD_ENABLED" envDefault:"true"`
 }
 
 // Load carrega as configurações da aplicação.
