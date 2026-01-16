@@ -27,6 +27,7 @@ type Options struct {
 	MediaHandler    *handler.MediaHandler // Handler para mídia temporária
 	APITokenService interface{}           // *api_token.Service - usando interface{} para evitar import cycle
 	InstanceRepo    interface{}           // storage.InstanceRepository - interface{} para evitar ciclos
+	RateLimit       middleware.RateLimitOption
 }
 
 func NewRouter(opts Options) *gin.Engine {
@@ -57,6 +58,9 @@ func NewRouter(opts Options) *gin.Engine {
 	}
 
 	protected := api.Group("")
+	if opts.RateLimit.Enabled {
+		protected.Use(middleware.RateLimit(opts.RateLimit))
+	}
 	if opts.APITokenService != nil {
 		// Type assertion para *api_token.Service
 		if apiTokenSvc, ok := opts.APITokenService.(*api_token.Service); ok {

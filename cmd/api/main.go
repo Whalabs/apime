@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/open-apime/apime/internal/api/handler"
+	"github.com/open-apime/apime/internal/api/middleware"
 	"github.com/open-apime/apime/internal/app"
 	"github.com/open-apime/apime/internal/config"
 	"github.com/open-apime/apime/internal/dashboard"
@@ -150,6 +151,17 @@ func main() {
 	userHandler := handler.NewUserHandler(userService)
 	healthHandler := handler.NewHealthHandler()
 
+	rateLimitOpts := middleware.RateLimitOption{
+		Enabled:     cfg.RateLimit.Enabled,
+		Requests:    cfg.RateLimit.Requests,
+		Window:      time.Duration(cfg.RateLimit.WindowSeconds) * time.Second,
+		Prefix:      cfg.RateLimit.RedisPrefix,
+		Logger:      logr,
+	}
+	if repos.RedisClient != nil {
+		rateLimitOpts.RedisClient = repos.RedisClient.RDB()
+	}
+
 	router := server.NewRouter(server.Options{
 		Env:             cfg.App.Env,
 		AuthSecret:      cfg.JWT.Secret,
@@ -164,6 +176,7 @@ func main() {
 		HealthHandler:   healthHandler,
 		UserHandler:     userHandler,
 		MediaHandler:    mediaHandler,
+		RateLimit:       rateLimitOpts,
 	})
 
 	if err := dashboard.Register(router, dashboard.Options{

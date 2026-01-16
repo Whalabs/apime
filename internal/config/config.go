@@ -9,13 +9,15 @@ import (
 
 // Config representa as variáveis principais da aplicação.
 type Config struct {
-	App      AppConfig
-	DB       DatabaseConfig
-	Redis    RedisConfig
-	JWT      JWTConfig
-	Log      LogConfig
-	Storage  StorageConfig
-	WhatsApp WhatsAppConfig
+	App        AppConfig
+	DB         DatabaseConfig
+	Redis      RedisConfig
+	JWT        JWTConfig
+	Log        LogConfig
+	Storage    StorageConfig
+	RateLimit  RateLimitConfig
+	IPRateLimit IPRateLimitConfig
+	WhatsApp   WhatsAppConfig
 }
 
 type StorageConfig struct {
@@ -53,6 +55,20 @@ type RedisConfig struct {
 	Addr     string `env:"REDIS_ADDR" envDefault:"localhost:6379"`
 	Password string `env:"REDIS_PASSWORD" envDefault:""`
 	DB       int    `env:"REDIS_DB" envDefault:"0"`
+}
+
+type RateLimitConfig struct {
+	Enabled       bool   `env:"RATE_LIMIT_ENABLED" envDefault:"true"`
+	Requests      int    `env:"RATE_LIMIT_REQUESTS" envDefault:"300"`
+	WindowSeconds int    `env:"RATE_LIMIT_WINDOW_SECONDS" envDefault:"60"`
+	RedisPrefix   string `env:"RATE_LIMIT_REDIS_PREFIX" envDefault:"ratelimit:api"`
+}
+
+type IPRateLimitConfig struct {
+	Enabled        bool `env:"IP_RATE_LIMIT_ENABLED" envDefault:"true"`
+	Requests       int  `env:"IP_RATE_LIMIT_REQUESTS" envDefault:"100"`
+	WindowSeconds  int  `env:"IP_RATE_LIMIT_WINDOW_SECONDS" envDefault:"900"`
+	SkipPrivateIPs bool `env:"IP_RATE_LIMIT_SKIP_PRIVATE_IPS" envDefault:"true"`
 }
 
 type JWTConfig struct {
