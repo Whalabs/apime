@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.0.3] - 2026-01-17
+### Internals
+- Limpeza dos templates do dashboard: remoção de comentários redundantes nos arquivos de docs, diagnostics, QR, instances, layout, login e users para reduzir ruído visual mantendo apenas o código relevante.
+
 ## [v1.0.2] - 2026-01-17
 ### Adicionado
 - Endpoint raiz agora responde com status, versão e nome da aplicação, enquanto o dashboard passou a receber `config.Version` para exibir a build atual.
