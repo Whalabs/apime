@@ -104,7 +104,6 @@ func Register(router *gin.Engine, opts Options) error {
 		c.Redirect(http.StatusSeeOther, "/dashboard")
 	})
 
-	// Servir arquivos estáticos
 	staticFiles, _ := fs.Sub(staticFS, "static")
 	router.StaticFS("/static", http.FS(staticFiles))
 
@@ -113,7 +112,7 @@ func Register(router *gin.Engine, opts Options) error {
 	router.GET("/dashboard/logout", h.logout)
 
 	group := router.Group("/dashboard")
-	group.Use(middleware.DashboardAuth(opts.JWTSecret))
+	group.Use(middleware.DashboardAuth(opts.JWTSecret, h.users))
 
 	group.GET("", h.overview)
 	group.GET("/instances", func(c *gin.Context) {
@@ -129,7 +128,6 @@ func Register(router *gin.Engine, opts Options) error {
 	group.GET("/instances/:id/diagnostics", h.instanceDiagnostics)
 	group.POST("/instances/:id/delete", h.deleteInstance)
 
-	// Rotas de usuários - apenas admin pode acessar
 	adminGroup := group.Group("")
 	adminGroup.Use(middleware.RequireAdmin(opts.UserService))
 	adminGroup.GET("/users", h.usersPage)
@@ -260,7 +258,6 @@ func (h *Handler) logout(c *gin.Context) {
 func (h *Handler) overview(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Obter informações do usuário do contexto
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
@@ -296,7 +293,6 @@ func (h *Handler) createInstance(c *gin.Context) {
 		return
 	}
 
-	// Obter informações do usuário do contexto
 	userID := c.GetString("userID")
 
 	_, err := h.instances.Create(c.Request.Context(), instance.CreateInput{
@@ -325,7 +321,6 @@ func (h *Handler) updateInstance(c *gin.Context) {
 		redirectWithMessage(c, "/dashboard", "error", "Nome é obrigatório.")
 		return
 	}
-	// Obter informações do usuário do contexto
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
@@ -369,34 +364,21 @@ func (h *Handler) rotateInstanceToken(c *gin.Context) {
 	values.Set("newInstanceToken", plain)
 	values.Set("newInstanceTokenInstanceID", id)
 	c.Redirect(http.StatusSeeOther, "/dashboard?"+values.Encode())
-}
-
-func (h *Handler) showInstanceQR(c *gin.Context) {
-	id := c.Param("id")
-
-	// Criar contexto independente do request HTTP com timeout de 60 segundos
-	// Isso garante que mesmo se o request for cancelado, a geração do QR continue
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// Obter informações do usuário do contexto
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
 	code, err := h.instances.GetQRByUser(ctx, id, userID, userRole)
 	if err != nil {
-		// Se o erro for de contexto cancelado, pode ser que o request foi cancelado
-		// mas o QR pode estar sendo gerado. Verificar se é realmente um erro ou apenas cancelamento do request
 		if errors.Is(err, context.Canceled) {
-			// Verificar se foi cancelamento do nosso contexto ou do request
 			select {
 			case <-c.Request.Context().Done():
-				// Request foi cancelado, mas QR pode estar sendo gerado
 				h.logger.Info("request cancelado pelo cliente durante geração de QR", zap.String("instance_id", id))
 				redirectWithMessage(c, "/dashboard", "error", "Requisição cancelada. Se o QR code não aparecer, tente novamente em alguns segundos.")
 				return
 			default:
-				// Foi cancelamento do nosso contexto (timeout)
 				h.logger.Warn("timeout ao gerar QR", zap.String("instance_id", id))
 				redirectWithMessage(c, "/dashboard", "error", "Timeout ao gerar QR code. Tente novamente.")
 				return
@@ -438,7 +420,6 @@ func (h *Handler) showInstanceQR(c *gin.Context) {
 func (h *Handler) getInstanceQRStatus(c *gin.Context) {
 	id := c.Param("id")
 
-	// Obter informações do usuário do contexto
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
@@ -448,7 +429,6 @@ func (h *Handler) getInstanceQRStatus(c *gin.Context) {
 		return
 	}
 
-	// Verificar se há QR disponível
 	hasQR := false
 	qrCode := ""
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -468,38 +448,19 @@ func (h *Handler) getInstanceQRStatus(c *gin.Context) {
 	})
 }
 
-func (h *Handler) getQRImage(c *gin.Context) {
-	code := c.Query("code")
-	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "código QR não fornecido"})
-		return
-	}
-
-	png, err := qrcode.Encode(code, qrcode.Medium, 256)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "erro ao gerar imagem"})
-		return
-	}
-
-	c.Data(http.StatusOK, "image/png", png)
-}
-
 func (h *Handler) instanceDiagnostics(c *gin.Context) {
 	instanceID := c.Param("id")
 	ctx := c.Request.Context()
 
-	// Obter informações do usuário do contexto
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
-	// Obter instância do banco
 	inst, err := h.instances.GetByUser(ctx, instanceID, userID, userRole)
 	if err != nil {
 		h.renderError(c, err)
 		return
 	}
 
-	// Obter diagnóstico do session manager
 	var diagnostics interface{}
 	if h.sessionManager != nil {
 		diagnostics = h.sessionManager.GetDiagnostics(instanceID)
@@ -549,7 +510,6 @@ func (h *Handler) usersPage(c *gin.Context) {
 		return
 	}
 
-	// Contar admins para esconder botão de deletar do último admin
 	adminCount := 0
 	for _, u := range users {
 		if u.Role == "admin" {
@@ -615,7 +575,6 @@ func (h *Handler) deleteUser(c *gin.Context) {
 
 	if err := h.users.Delete(c.Request.Context(), id); err != nil {
 		h.logger.Warn("erro ao remover usuário", zap.Error(err))
-		// O service já protege contra deletar o último admin
 		if err.Error() == "não é possível remover o último administrador" {
 			redirectWithMessage(c, "/dashboard/users", "error", "Não é possível remover o único administrador do sistema.")
 			return
@@ -779,11 +738,9 @@ func (h *Handler) renderError(c *gin.Context, err error) {
 }
 
 func (h *Handler) openAPIPath() string {
-	// Primeiro tenta na raiz do projeto (onde está o binário)
 	if _, err := os.Stat("openapi.yaml"); err == nil {
 		return "openapi.yaml"
 	}
-	// Fallback: tenta no docsDir se existir
 	if h.docsDir != "" {
 		path := filepath.Join(h.docsDir, "openapi.yaml")
 		if _, err := os.Stat(path); err == nil {

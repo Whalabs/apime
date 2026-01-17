@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -9,7 +10,11 @@ import (
 
 const dashboardCookie = "dashboard_token"
 
-func DashboardAuth(secret string) gin.HandlerFunc {
+type UserProvider interface {
+	Exists(ctx context.Context, id string) (bool, error)
+}
+
+func DashboardAuth(secret string, users UserProvider) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString, err := c.Cookie(dashboardCookie)
 		if err != nil || tokenString == "" {
@@ -29,6 +34,16 @@ func DashboardAuth(secret string) gin.HandlerFunc {
 		}
 
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			userID, _ := claims["sub"].(string)
+
+			exists, err := users.Exists(c.Request.Context(), userID)
+			if err != nil || !exists {
+				clearDashboardCookie(c)
+				c.Redirect(http.StatusSeeOther, "/dashboard/login")
+				c.Abort()
+				return
+			}
+
 			if sub, ok := claims["sub"].(string); ok {
 				c.Set("userID", sub)
 			}

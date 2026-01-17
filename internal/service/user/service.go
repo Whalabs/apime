@@ -29,14 +29,12 @@ type InstanceManager interface {
 	Delete(ctx context.Context, id string) error
 }
 
-// Service encapsula as regras de negócio de usuários.
 type Service struct {
 	repo         storage.UserRepository
 	tokenService TokenManager
 	instanceSvc  InstanceManager
 }
 
-// NewService cria um novo serviço de usuários.
 func NewService(repo storage.UserRepository, tokenService TokenManager, instanceSvc InstanceManager) *Service {
 	return &Service{
 		repo:         repo,
@@ -45,24 +43,31 @@ func NewService(repo storage.UserRepository, tokenService TokenManager, instance
 	}
 }
 
-// CreateInput define os dados para criação de usuários.
 type CreateInput struct {
 	Email    string
 	Password string
 	Role     string
 }
 
-// List retorna todos os usuários cadastrados.
 func (s *Service) List(ctx context.Context) ([]model.User, error) {
 	return s.repo.List(ctx)
 }
 
-// Get retorna um usuário por ID.
 func (s *Service) Get(ctx context.Context, id string) (model.User, error) {
 	return s.repo.GetByID(ctx, id)
 }
 
-// Create cadastra um novo usuário, gera token padrão e retorna user + token.
+func (s *Service) Exists(ctx context.Context, id string) (bool, error) {
+	_, err := s.repo.GetByID(ctx, id)
+	if err == nil {
+		return true, nil
+	}
+	if err == storage.ErrNotFound {
+		return false, nil
+	}
+	return false, err
+}
+
 func (s *Service) Create(ctx context.Context, input CreateInput) (model.User, string, error) {
 	email := strings.TrimSpace(strings.ToLower(input.Email))
 	if email == "" || !strings.Contains(email, "@") {
@@ -105,7 +110,6 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (model.User, st
 	return createdUser, tokenString, nil
 }
 
-// UpdatePassword atualiza a senha de um usuário.
 func (s *Service) UpdatePassword(ctx context.Context, id, password string) error {
 	if len(password) < 8 {
 		return ErrInvalidPassword
@@ -117,7 +121,6 @@ func (s *Service) UpdatePassword(ctx context.Context, id, password string) error
 	return s.repo.UpdatePassword(ctx, id, hash)
 }
 
-// Delete remove um usuário, garantindo limpeza de instâncias e proteção do último admin.
 func (s *Service) Delete(ctx context.Context, id string) error {
 	user, err := s.repo.GetByID(ctx, id)
 	if err != nil {
@@ -140,9 +143,7 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		}
 	}
 
-	// Limpar sessões de instância (no disco/memória) antes de deletar do banco
 	if s.instanceSvc != nil {
-		// ListByUser com role "user" força busca apenas pelo OwnerUserID = id
 		instances, err := s.instanceSvc.ListByUser(ctx, id, "user")
 		if err == nil {
 			for _, inst := range instances {
@@ -153,8 +154,6 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// RotateAPIToken gera um novo token de API para o usuário informado.
-// Comentário: garante que administradores possam renovar credenciais rapidamente.
 func (s *Service) RotateAPIToken(ctx context.Context, id string) (string, error) {
 	if s.tokenService == nil {
 		return "", ErrTokenServiceUnavailable
