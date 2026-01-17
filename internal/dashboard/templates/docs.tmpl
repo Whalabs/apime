@@ -20,7 +20,7 @@
     position: relative;
   }
 
-  /* Sidebar */
+
   .docs-sidebar {
     width: var(--docs-sidebar-w);
     position: sticky;
@@ -122,7 +122,7 @@
     font-weight: 600;
   }
 
-  /* Content */
+
   .docs-main {
     flex: 1;
     min-width: 0;
@@ -177,7 +177,7 @@
     font-size: 1rem;
   }
 
-  /* Two Column Split */
+
   .split-view {
     display: grid;
     grid-template-columns: 1.1fr 1fr;
@@ -189,7 +189,7 @@
     .docs-sidebar { display: none; }
   }
 
-  /* Code Blocks */
+
   .code-container {
     background: var(--code-bg);
     background: var(--code-bg);
@@ -293,7 +293,7 @@
     border-color: rgba(255,255,255,0.2);
   }
 
-  /* Parameter Tables */
+
   .params-table {
     width: 100%;
     border-collapse: collapse;
@@ -339,7 +339,7 @@
     margin-left: 0.4rem;
   }
 
-  /* Introdução */
+
   .intro-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -351,7 +351,7 @@
 
   .intro-card h2 { margin-top: 0; font-size: 2rem; background: linear-gradient(to right, var(--primary), var(--primary-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-  /* Section Titles */
+
   h3 { font-size: 1.5rem; margin-bottom: 1rem; color: var(--text); }
 
   .auth-info {
@@ -366,9 +366,8 @@
 </style>
 
 <div class="docs-layout">
-  <!-- Sidebar -->
+
   <aside class="docs-sidebar">
-    <!-- Conceitos: Default expanded -->
     <div class="nav-group expanded">
       <div class="nav-group-header" onclick="toggleSidebarCategory(this)">
         <h4>Conceitos</h4>
@@ -376,7 +375,6 @@
       </div>
       <div class="nav-group-content">
         <a href="#intro" class="nav-item active">Introdução</a>
-        <!-- Health Check precisa ser exibido logo após a introdução para dar destaque ao monitoramento -->
         <a href="#health-check" class="nav-item">Health Check</a>
         <a href="#users-admin" class="nav-item">Gerenciamento de Usuários</a>
         <a href="#webhooks" class="nav-item">Webhooks</a>
@@ -428,7 +426,7 @@
     </div>
   </aside>
 
-  <!-- Main Content -->
+
   <main class="docs-main">
 
     <section id="intro" class="endpoint-section">
@@ -447,7 +445,7 @@
       </div>
     </section>
 
-    <!-- Health Check -->
+
     <section id="health-check" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -481,7 +479,7 @@
       </div>
     </section>
 
-    <!-- Usuários (Admin) -->
+
     <section id="users-admin" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -555,7 +553,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Webhooks -->
+
     <section id="webhooks" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -599,7 +597,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Listar Instâncias -->
+
     <section id="inst-list" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -623,7 +621,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Criar Instância -->
+
     <section id="inst-create" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -667,7 +665,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Ver Detalhes -->
+
     <section id="inst-get" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -691,7 +689,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Atualizar Instância -->
+
     <section id="inst-update" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -727,7 +725,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Remover Instância -->
+
     <section id="inst-delete" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -751,7 +749,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Conectar (QR) -->
+
     <section id="inst-qr" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -775,7 +773,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Status -->
+
     <section id="inst-status" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -823,7 +821,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Rotacionar Token -->
+
     <section id="inst-rotate" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -847,7 +845,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Eventos de Webhook -->
+
     <section id="webhook-events" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -977,7 +975,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Listar Mensagens -->
+
     <section id="msg-list" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -1001,7 +999,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Enviar Texto -->
+
     <section id="msg-text" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -1037,7 +1035,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Enviar Mídia -->
+
     <section id="msg-media" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -1074,7 +1072,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Enviar Áudio -->
+
     <section id="msg-audio" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -1111,7 +1109,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Enviar Documento -->
+
     <section id="msg-doc" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -1147,7 +1145,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Perfil -->
+
     <section id="prof-info" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -1171,7 +1169,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Perfil Business -->
+
     <section id="prof-biz" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -1195,7 +1193,7 @@ curl -X POST {{.BaseURL}}/api/users \
       </div>
     </section>
 
-    <!-- Foto de Perfil -->
+
     <section id="prof-pic" class="endpoint-section">
       <div class="split-view">
         <div>
@@ -1225,10 +1223,9 @@ curl -X POST {{.BaseURL}}/api/users \
 </div>
 
 <script>
-  // Utilitário de Cópia
+
   window.copyToClipboard = async function(text, btn) {
     try {
-      // Se texto não fornecido, busca do elemento .code-body vizinho
       if (!text && btn) {
         const container = btn.closest('.code-container');
         const codeBlock = container.querySelector('.code-body');
@@ -1250,55 +1247,48 @@ curl -X POST {{.BaseURL}}/api/users \
     }
   };
 
-    // Toggle sidebar category accordion
     window.toggleSidebarCategory = function(header) {
       const group = header.parentElement;
       const wasExpanded = group.classList.contains('expanded');
 
-      // Close all other groups
       document.querySelectorAll('.nav-group.expanded').forEach(el => {
         el.classList.remove('expanded');
       });
 
-      // If it wasn't expanded before, expand it now
-      // (If it was expanded, we just closed it along with others, effectively toggling it off)
+
       if (!wasExpanded) {
         group.classList.add('expanded');
       }
     };
 
-    // Toggle code expand/collapse
     window.toggleExpand = function(btn) {
       const container = btn.closest('.code-container');
       const codeBody = container.querySelector('.code-body');
       
       if (codeBody.classList.contains('expanded')) {
         codeBody.classList.remove('expanded');
-        container.classList.remove('expanded'); // Remove class from container
-        // Icone +
+        container.classList.remove('expanded');
+
         btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
         btn.title = "Expandir";
       } else {
         codeBody.classList.add('expanded');
-        container.classList.add('expanded'); // Add class to container
-        // Icone -
+        container.classList.add('expanded');
+
         btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
         btn.title = "Recolher";
       }
     };
   
-    // Active Nav on Scroll
     document.addEventListener('DOMContentLoaded', () => {
-      // Expand sidebar group based on hash
       const hash = window.location.hash;
       if (hash) {
         const targetLink = document.querySelector(`.nav-item[href="${hash}"]`);
         if (targetLink) {
            const group = targetLink.closest('.nav-group');
            if (group) {
-             // Close default expanded or others
-             document.querySelectorAll('.nav-group.expanded').forEach(el => el.classList.remove('expanded'));
-             // Expand target
+             if (group) {
+
              group.classList.add('expanded');
            }
         }
@@ -1311,7 +1301,7 @@ curl -X POST {{.BaseURL}}/api/users \
         let current = '';
         sections.forEach(section => {
           const sectionTop = section.offsetTop;
-          // Offset reduced to 80 (approx header height) to prevent capturing next short section
+
           if (window.pageYOffset >= sectionTop - 80) {
             current = section.getAttribute('id');
           }
@@ -1322,12 +1312,8 @@ curl -X POST {{.BaseURL}}/api/users \
           if (item.getAttribute('href').substring(1) === current) {
             item.classList.add('active');
             
-            // Auto-expand parent group if needed
-            const group = item.closest('.nav-group');
             if (group && !group.classList.contains('expanded')) {
-              // Close others
               document.querySelectorAll('.nav-group.expanded').forEach(el => el.classList.remove('expanded'));
-              // Expand current
               group.classList.add('expanded');
             }
           }
@@ -1337,22 +1323,14 @@ curl -X POST {{.BaseURL}}/api/users \
       window.addEventListener('scroll', updateNav);
       updateNav();
   
-      // Add expand buttons to all code headers
       document.querySelectorAll('.code-header').forEach(header => {
-        // Check if button already exists to avoid duplicates
         if (header.querySelector('.btn-expand-code')) return;
   
         const container = header.closest('.code-container');
-        if (!container) return; 
-        
-        // Ensure visible by default
-      const codeBody = container.querySelector('.code-body');
-      // Default hidden per user request: do NOT add expanded class
-      // if (codeBody) codeBody.classList.add('expanded'); 
+        if (!container) return;
 
-      const btn = document.createElement('button');
-      btn.className = 'btn-expand-code';
-      // Default collapsed, so show plus
+        const btn = document.createElement('button');
+        btn.className = 'btn-expand-code';
       btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
       btn.title = 'Expandir';
       btn.type = 'button';

@@ -56,7 +56,7 @@
     stroke-width: 2;
   }
 
-  /* Tabela de Usuários */
+
   .users-table-container {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -113,7 +113,7 @@
     font-weight: 500;
   }
 
-  /* Badge de Papel */
+
   .role-badge {
     display: inline-flex;
     align-items: center;
@@ -145,7 +145,7 @@
     color: #16a34a;
   }
 
-  /* Botões de Ação */
+
   .action-buttons {
     display: flex;
     gap: 0.5rem;
@@ -186,7 +186,7 @@
     flex-shrink: 0;
   }
 
-  /* Tooltips */
+
   [data-tooltip] {
     position: relative;
     z-index: 1;
@@ -232,7 +232,7 @@
     visibility: visible;
   }
 
-  /* Modais */
+
   .modal-overlay {
     position: fixed;
     inset: 0;
@@ -426,7 +426,7 @@
     background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
   }
 
-  /* Seção de Tokens */
+
   .tokens-section {
     margin-top: 1.5rem;
   }
@@ -530,13 +530,13 @@
     background: rgba(148, 163, 184, 0.2);
   }
 
-  /* Empty State */
+
   .empty-state {
     text-align: center;
     padding: 3rem 1.5rem;
     color: var(--muted);
   }
-  /* Suceso Banner: Novo Usuário */
+
   .new-user-banner {
     background: rgba(34, 197, 94, 0.1);
     border: 1px solid rgba(34, 197, 94, 0.2);
@@ -748,7 +748,7 @@
   </div>
 </div>
 
-<!-- Modal: Criar Usuário -->
+
 <div class="modal-overlay" id="createUserModal">
   <div class="modal-content">
     <div class="modal-header">
@@ -841,7 +841,7 @@
   </div>
 </div>
 
-<!-- Modal: Tokens -->
+
 <div class="modal-overlay" id="userTokenModal">
   <div class="modal-content wide">
     <div class="modal-header">
@@ -899,7 +899,6 @@
 </div>
 
 <script>
-// Utilitário global para copiar texto
 window.copyToClipboard = async function(text, btn) {
   try {
     await navigator.clipboard.writeText(text);
@@ -921,7 +920,6 @@ window.copyToClipboard = async function(text, btn) {
 };
 
 document.addEventListener('DOMContentLoaded', function() {
-  // Utilitários de Modal
   function openModal(modal) {
     if (modal) modal.classList.add('active');
   }
@@ -929,7 +927,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (modal) modal.classList.remove('active');
   }
 
-  // Modal: Criar Usuário
   const createUserModal = document.getElementById('createUserModal');
   const btnOpenCreateUser = document.getElementById('btnOpenCreateUser');
   const closeCreateUserModal = document.getElementById('closeCreateUserModal');
@@ -950,7 +947,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Modal: Alterar Senha
   const changePasswordModal = document.getElementById('changePasswordModal');
   const changePasswordForm = document.getElementById('changePasswordForm');
   const closePasswordModal = document.getElementById('closePasswordModal');
@@ -981,7 +977,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Validação de senha
   if (changePasswordForm) {
     changePasswordForm.addEventListener('submit', function(e) {
       const newPass = document.getElementById('new-password').value;
@@ -993,7 +988,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Modal: Tokens
   const tokenModal = document.getElementById('userTokenModal');
   const closeTokenModal = document.getElementById('closeUserTokenModal');
   const tokenButtons = document.querySelectorAll('.user-token-btn');
@@ -1118,7 +1112,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Fechar modais com ESC
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
       closeModal(createUserModal);
@@ -1128,8 +1121,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  // Handlers para modal de confirmação customizado
-  // Remover usuário
+
   const deleteUserForms = document.querySelectorAll('.delete-user-form');
   deleteUserForms.forEach(form => {
     form.addEventListener('submit', async function(e) {
@@ -1146,7 +1138,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // Validação de senha com alert customizado
   if (changePasswordForm) {
     const originalSubmit = changePasswordForm.onsubmit;
     changePasswordForm.onsubmit = null;
@@ -1160,7 +1151,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Substituir confirms e alerts na seção de tokens
   const originalRenderTokenList = renderTokenList;
   renderTokenList = function(tokens) {
     if (!tokens.length) {
@@ -1211,7 +1201,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   };
 
-  // Substituir alert no token form (mantém único handler para evitar chamadas duplicadas)
   if (tokenForm) {
     const originalTokenSubmit = tokenForm.onsubmit;
     tokenForm.onsubmit = null;
@@ -1245,7 +1234,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Substituir alert no botão de copiar
   if (copyBtn) {
     copyBtn.onclick = null;
     copyBtn.addEventListener('click', async function() {

@@ -56,7 +56,7 @@
     stroke-width: 2;
   }
 
-  /* Tabela */
+
   .instances-table-container {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -131,7 +131,7 @@
     color: var(--muted);
   }
 
-  /* Status Badges */
+
   .status-badge {
     display: inline-flex;
     align-items: center;
@@ -158,7 +158,7 @@
     color: #ef4444;
   }
 
-  /* Botões de Ação */
+
   .action-buttons {
     display: flex;
     gap: 0.4rem;
@@ -246,7 +246,7 @@
     flex-shrink: 0;
   }
 
-  /* Tooltips */
+
   [data-tooltip] {
     position: relative;
     z-index: 1;
@@ -292,7 +292,7 @@
     visibility: visible;
   }
 
-  /* Modal */
+
   .modal-overlay {
     position: fixed;
     inset: 0;
@@ -468,14 +468,14 @@
     opacity: 0.9;
   }
 
-  /* Empty State */
+
   .empty-state {
     text-align: center;
     padding: 3rem 1.5rem;
     color: var(--muted);
   }
 
-  /* Token Banner */
+
   .token-banner {
     background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
     border: 1px solid rgba(34, 197, 94, 0.3);
@@ -721,7 +721,7 @@
   </div>
 </div>
 
-<!-- Modal: Criar/Editar Instância -->
+
 <div class="modal-overlay" id="instanceModal">
   <div class="modal-content">
     <div class="modal-header">
@@ -770,7 +770,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  // Copiar para clipboard
   const copyButtons = document.querySelectorAll('.copy-btn, .token-copy-btn');
   copyButtons.forEach(btn => {
     btn.addEventListener('click', function() {
@@ -779,7 +778,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const originalHTML = this.innerHTML;
         this.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
         this.style.color = '#22c55e';
-        // Mostrar toast de confirmação
         if (typeof window.createToast === 'function') {
           window.createToast('success', 'Copiado para a área de transferência!', 2000);
         }
@@ -796,7 +794,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // Modal
   const modal = document.getElementById('instanceModal');
   const modalTitleText = document.getElementById('instanceModalTitleText');
   const modalForm = document.getElementById('instanceModalForm');
@@ -862,8 +859,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // Handlers para modal de confirmação customizado
-  // Gerar token
+
   const generateTokenForms = document.querySelectorAll('.generate-token-form');
   generateTokenForms.forEach(form => {
     form.addEventListener('submit', async function(e) {
@@ -879,7 +875,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // Remover instância
   const deleteInstanceForms = document.querySelectorAll('.delete-instance-form');
   deleteInstanceForms.forEach(form => {
     form.addEventListener('submit', async function(e) {
@@ -896,7 +891,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // Desconectar instância
   const disconnectInstanceForms = document.querySelectorAll('.disconnect-instance-form');
   disconnectInstanceForms.forEach(form => {
     form.addEventListener('submit', async function(e) {

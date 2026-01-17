@@ -90,7 +90,7 @@
       height: 20px;
     }
 
-    /* Loading Spinner */
+
     .spinner {
       width: 18px;
       height: 18px;
@@ -177,10 +177,8 @@
         });
     }
     
-    // Polling a cada 3 segundos
     pollInterval = setInterval(updateQR, 3000);
     
-    // Limpar ao sair da página
     window.addEventListener('beforeunload', () => {
       if (pollInterval) {
         clearInterval(pollInterval);

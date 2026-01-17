@@ -51,7 +51,6 @@
   </div>
 
   <div class="grid-2">
-    <!-- INFO CARD -->
     <div class="card">
       <h3>Informações da Instância</h3>
       <table>
@@ -63,7 +62,6 @@
       </table>
     </div>
 
-    <!-- DIAGNOSTICS CARD -->
     {{if .Data.Diagnostics}}
     {{$diag := .Data.Diagnostics}}
     <div class="card">
@@ -109,7 +107,6 @@
     {{end}}
   </div>
 
-  <!-- ANALYSIS CARD -->
   <div class="card">
     <h3>Análise</h3>
     {{if .Data.Diagnostics}}

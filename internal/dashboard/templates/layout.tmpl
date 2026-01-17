@@ -458,7 +458,7 @@
   </footer>
   {{end}}
 
-  <!-- Modal de Confirmação Global -->
+
   <style>
     .confirm-overlay {
       position: fixed;
@@ -687,7 +687,7 @@
         }, ms);
       }
 
-      // Expor createToast globalmente para outros templates
+
       window.createToast = createToast;
 
       var theme = getTheme();
@@ -737,7 +737,7 @@
       if (params.has('success')) createToast('success', params.get('success'));
       if (params.has('error')) createToast('error', params.get('error'));
 
-      // Modal de Confirmação Global
+
       window.customConfirm = function(message, title = 'Confirmar ação', options = {}) {
         return new Promise(function(resolve) {
           var modal = document.getElementById('customConfirmModal');
@@ -749,14 +749,12 @@
           titleEl.textContent = title;
           messageEl.textContent = message;
           
-          // Aplicar classe danger se for ação destrutiva
           if (options.danger) {
             okBtn.classList.add('danger');
           } else {
             okBtn.classList.remove('danger');
           }
           
-          // Atualizar texto do botão OK se fornecido
           okBtn.textContent = options.confirmText || 'Confirmar';
           cancelBtn.textContent = options.cancelText || 'Cancelar';
           
@@ -794,7 +792,6 @@
           titleEl.textContent = title;
           messageEl.textContent = message;
           
-          // Esconder botão cancelar para alert
           cancelBtn.style.display = 'none';
           okBtn.textContent = options.okText || 'OK';
           okBtn.classList.remove('danger');
