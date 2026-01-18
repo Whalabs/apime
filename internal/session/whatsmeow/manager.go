@@ -1023,7 +1023,6 @@ func (m *Manager) GetDiagnostics(instanceID string) interface{} {
 
 	if hasClient {
 		diag.IsLoggedIn = client.IsLoggedIn()
-		// Verificar se o cliente está conectado (não há método direto, mas podemos inferir)
 		diag.ClientConnected = client.IsLoggedIn()
 	}
 
@@ -1032,36 +1031,59 @@ func (m *Manager) GetDiagnostics(instanceID string) interface{} {
 	diag.StorageType = storageInfo.Type
 	diag.StorageLocation = storageInfo.Location
 
-	dbPath := filepath.Join(m.baseDir, instanceID+".db")
-	if fileInfo, err := os.Stat(dbPath); err == nil {
-		diag.HasSQLiteFile = true
-		diag.SQLiteFilePath = dbPath
-		diag.SQLiteFileSize = fileInfo.Size()
-		diag.SQLiteFileModTime = fileInfo.ModTime()
-
-		ctx := context.Background()
-		clientLog := &noopLogger{}
-		sqlitePath := fmt.Sprintf("file:%s?_foreign_keys=on", dbPath)
-		container, err := sqlstore.New(ctx, "sqlite3", sqlitePath, clientLog)
-		if err == nil {
-			deviceStore, err := container.GetFirstDevice(ctx)
-			if err == nil {
-				diag.HasDeviceStore = true
-				if deviceStore.ID != nil && !deviceStore.ID.IsEmpty() {
-					diag.DeviceJID = deviceStore.ID.String()
-				}
-				diag.DevicePushName = deviceStore.PushName
-			}
-		}
-	}
-
-	// Adicionar informações de history sync
+	// Buscar informações da instância (history sync e JID)
+	var inst *model.Instance
 	if m.instanceRepo != nil {
 		ctx := context.Background()
-		if inst, err := m.instanceRepo.GetByID(ctx, instanceID); err == nil {
+		if i, err := m.instanceRepo.GetByID(ctx, instanceID); err == nil {
+			inst = &i
 			diag.HistorySyncStatus = string(inst.HistorySyncStatus)
 			diag.HistorySyncCycleID = inst.HistorySyncCycleID
 			diag.HistorySyncUpdatedAt = inst.HistorySyncUpdatedAt
+		}
+	}
+
+	// Verificar device store baseado no driver de storage
+	if m.storageDriver == "postgres" && m.pgConnString != "" {
+		// PostgreSQL: usar JID salvo na instância
+		if inst != nil && inst.WhatsAppJID != "" {
+			diag.DeviceJID = inst.WhatsAppJID
+			diag.HasDeviceStore = true
+
+			ctx := context.Background()
+			container, err := sqlstore.New(ctx, "postgres", m.pgConnString, &noopLogger{})
+			if err == nil {
+				jid, err := types.ParseJID(inst.WhatsAppJID)
+				if err == nil {
+					deviceStore, err := container.GetDevice(ctx, jid)
+					if err == nil && deviceStore != nil {
+						diag.DevicePushName = deviceStore.PushName
+					}
+				}
+			}
+		}
+	} else {
+		// SQLite: verificar arquivo de sessão
+		dbPath := filepath.Join(m.baseDir, instanceID+".db")
+		if fileInfo, err := os.Stat(dbPath); err == nil {
+			diag.HasSQLiteFile = true
+			diag.SQLiteFilePath = dbPath
+			diag.SQLiteFileSize = fileInfo.Size()
+			diag.SQLiteFileModTime = fileInfo.ModTime()
+
+			ctx := context.Background()
+			sqlitePath := fmt.Sprintf("file:%s?_foreign_keys=on", dbPath)
+			container, err := sqlstore.New(ctx, "sqlite3", sqlitePath, &noopLogger{})
+			if err == nil {
+				deviceStore, err := container.GetFirstDevice(ctx)
+				if err == nil {
+					diag.HasDeviceStore = true
+					if deviceStore.ID != nil && !deviceStore.ID.IsEmpty() {
+						diag.DeviceJID = deviceStore.ID.String()
+					}
+					diag.DevicePushName = deviceStore.PushName
+				}
+			}
 		}
 	}
 
