@@ -764,10 +764,10 @@ curl -X POST {{.BaseURL}}/api/users \
           <div class="code-container">
             <div class="code-header">
               <span class="code-lang">cURL</span>
-              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances/{instanceId}/qr -H "Authorization: Bearer $JWT_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances/{instanceId}/qr -H "Authorization: Bearer $INSTANCE_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
             </div>
             <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances/{instanceId}/qr \
-  -H "Authorization: Bearer $JWT_TOKEN"</pre>
+  -H "Authorization: Bearer $INSTANCE_TOKEN"</pre>
           </div>
         </div>
       </div>
@@ -812,10 +812,10 @@ curl -X POST {{.BaseURL}}/api/users \
           <div class="code-container">
             <div class="code-header">
               <span class="code-lang">cURL</span>
-              <button class="btn-copy-code" data-code='curl -X POST {{.BaseURL}}/api/instances/{instanceId}/disconnect -H "Authorization: Bearer $JWT_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+              <button class="btn-copy-code" data-code='curl -X POST {{.BaseURL}}/api/instances/{instanceId}/disconnect -H "Authorization: Bearer $INSTANCE_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
             </div>
             <pre class="code-body">curl -X POST {{.BaseURL}}/api/instances/{instanceId}/disconnect \
-  -H "Authorization: Bearer $JWT_TOKEN"</pre>
+  -H "Authorization: Bearer $INSTANCE_TOKEN"</pre>
           </div>
         </div>
       </div>

@@ -27,4 +27,4 @@ Cada instância possui um `owner_user_id` que define seu proprietário.
 Obtido via `/api/auth/login` ou retornado imediatamente ao criar um usuário (`POST /users`). Permite gerenciar instâncias pelo dashboard ou API.
 
 ### Token da Instância
-Gerado via dashboard ou `/api/instances/{id}/token/rotate`. Usado para operações de mensageria (enviar textos, mídias, etc). Cada instância tem seu próprio token.
+Gerado via dashboard ou `/api/instances/{id}/token/rotate`. Usado para conectar (QR Code), desconectar e operações de mensageria (enviar textos, mídias, etc). Cada instância tem seu próprio token.

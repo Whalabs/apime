@@ -193,18 +193,24 @@ func (h *InstanceHandler) rotateToken(c *gin.Context) {
 
 func (h *InstanceHandler) getQR(c *gin.Context) {
 	id := c.Param("id")
-	if c.GetString("authType") == "instance_token" {
-		response.ErrorWithMessage(c, http.StatusForbidden, "endpoint disponível apenas com token de usuário")
-		return
-	}
-
 	h.log.Info("solicitando QR code", zap.String("instance_id", id))
 
-	// Obter informações do usuário do contexto
-	userID := c.GetString("userID")
-	userRole := c.GetString("userRole")
+	var qr string
+	var err error
 
-	qr, err := h.service.GetQRByUser(c.Request.Context(), id, userID, userRole)
+	if c.GetString("authType") == "instance_token" {
+		if c.GetString("instanceID") != id {
+			response.ErrorWithMessage(c, http.StatusForbidden, "token inválido para esta instância")
+			return
+		}
+		qr, err = h.service.GetQR(c.Request.Context(), id)
+	} else {
+		// Obter informações do usuário do contexto
+		userID := c.GetString("userID")
+		userRole := c.GetString("userRole")
+		qr, err = h.service.GetQRByUser(c.Request.Context(), id, userID, userRole)
+	}
+
 	if err != nil {
 		h.log.Error("erro ao obter QR code",
 			zap.String("instance_id", id),
@@ -260,10 +266,20 @@ func getErrorType(err error) string {
 
 func (h *InstanceHandler) disconnect(c *gin.Context) {
 	id := c.Param("id")
+
 	if c.GetString("authType") == "instance_token" {
-		response.ErrorWithMessage(c, http.StatusForbidden, "endpoint disponível apenas com token de usuário")
+		if c.GetString("instanceID") != id {
+			response.ErrorWithMessage(c, http.StatusForbidden, "token inválido para esta instância")
+			return
+		}
+		if err := h.service.Disconnect(c.Request.Context(), id); err != nil {
+			response.Error(c, http.StatusInternalServerError, err)
+			return
+		}
+		response.Success(c, http.StatusOK, gin.H{"message": "instância desconectada"})
 		return
 	}
+
 	// Obter informações do usuário do contexto
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
