@@ -45,6 +45,7 @@ type Manager struct {
 	currentQRs         map[string]string
 	qrContexts         map[string]context.CancelFunc
 	pairingSuccess     map[string]time.Time
+	sessionReady       map[string]bool
 	mu                 sync.RWMutex
 	log                *zap.Logger
 	encKey             string
@@ -77,6 +78,7 @@ func NewManager(log *zap.Logger, encKey, storageDriver, baseDir, pgConnString st
 		currentQRs:         make(map[string]string),
 		qrContexts:         make(map[string]context.CancelFunc),
 		pairingSuccess:     make(map[string]time.Time),
+		sessionReady:       make(map[string]bool),
 		log:                log,
 		encKey:             encKey,
 		storageDriver:      storageDriver,
@@ -125,6 +127,13 @@ func (m *Manager) GetSessionStorageInfo(instanceID string) SessionStorageInfo {
 		Type:     "sqlite",
 		Location: dbPath,
 	}
+}
+
+
+func (m *Manager) IsSessionReady(instanceID string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.sessionReady[instanceID]
 }
 
 func (m *Manager) CreateSession(ctx context.Context, instanceID string) (string, error) {
@@ -331,23 +340,21 @@ func (m *Manager) monitorQRChannel(instanceID string, client *whatsmeow.Client, 
 			m.pairingSuccess[instanceID] = time.Now()
 			m.mu.Unlock()
 
+			
 			if client != nil && client.Store != nil && client.Store.ID != nil {
-				go func() {
-					if m.instanceRepo != nil {
-						ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-						defer cancel()
-
-						inst, err := m.instanceRepo.GetByID(ctx, instanceID)
-						if err != nil {
-							m.log.Error("erro ao buscar instância para salvar JID",
-								zap.String("instance_id", instanceID),
-								zap.Error(err),
-							)
-							return
-						}
-
+				if m.instanceRepo != nil {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					inst, err := m.instanceRepo.GetByID(ctx, instanceID)
+					if err != nil {
+						m.log.Error("erro ao buscar instância para salvar JID",
+							zap.String("instance_id", instanceID),
+							zap.Error(err),
+						)
+						cancel()
+					} else {
 						inst.WhatsAppJID = client.Store.ID.String()
 						_, err = m.instanceRepo.Update(ctx, inst)
+						cancel()
 						if err != nil {
 							m.log.Error("erro ao salvar JID da instância",
 								zap.String("instance_id", instanceID),
@@ -361,7 +368,7 @@ func (m *Manager) monitorQRChannel(instanceID string, client *whatsmeow.Client, 
 							)
 						}
 					}
-				}()
+				}
 			}
 
 			go m.initHistorySyncCycle(instanceID)
@@ -381,9 +388,19 @@ func (m *Manager) monitorQRChannel(instanceID string, client *whatsmeow.Client, 
 							}
 						} else {
 							m.log.Info("presence enviado com sucesso", zap.String("instance_id", instanceID))
+							
+							m.mu.Lock()
+							m.sessionReady[instanceID] = true
+							m.mu.Unlock()
+							m.log.Info("sessão marcada como pronta para mensagens", zap.String("instance_id", instanceID))
 							return
 						}
 					}
+					
+					m.mu.Lock()
+					m.sessionReady[instanceID] = true
+					m.mu.Unlock()
+					m.log.Warn("sessão marcada como pronta após falha no presence", zap.String("instance_id", instanceID))
 				}()
 
 				go func() {
@@ -573,6 +590,8 @@ func (m *Manager) DeleteSession(instanceID string) error {
 		delete(m.clients, instanceID)
 	}
 	delete(m.currentQRs, instanceID)
+	delete(m.sessionReady, instanceID)
+	delete(m.pairingSuccess, instanceID)
 	m.mu.Unlock()
 
 	// Se o cliente não estiver em memória, tentar restaurar para realizar o logout
@@ -583,6 +602,7 @@ func (m *Manager) DeleteSession(instanceID string) error {
 			// Remove do map novamente pois restoreSessionIfExists adiciona
 			m.mu.Lock()
 			delete(m.clients, instanceID)
+			delete(m.sessionReady, instanceID)
 			m.mu.Unlock()
 		}
 	}
@@ -952,9 +972,19 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 				}
 			} else {
 				m.log.Info("presence enviado com sucesso", zap.String("instance_id", instanceID))
+
+				m.mu.Lock()
+				m.sessionReady[instanceID] = true
+				m.mu.Unlock()
+				m.log.Info("sessão restaurada e pronta para mensagens", zap.String("instance_id", instanceID))
 				return
 			}
 		}
+		
+		m.mu.Lock()
+		m.sessionReady[instanceID] = true
+		m.mu.Unlock()
+		m.log.Warn("sessão restaurada marcada como pronta após falha no presence", zap.String("instance_id", instanceID))
 	}()
 
 	m.log.Info("sessão restaurada com sucesso", zap.String("instance_id", instanceID), zap.Bool("is_logged_in", client.IsLoggedIn()))
@@ -1291,9 +1321,17 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 						}
 					} else {
 						m.log.Info("presence enviado - instância totalmente ativa", zap.String("instance_id", instanceID))
+						
+						m.mu.Lock()
+						m.sessionReady[instanceID] = true
+						m.mu.Unlock()
 						return
 					}
 				}
+				
+				m.mu.Lock()
+				m.sessionReady[instanceID] = true
+				m.mu.Unlock()
 			}()
 		}
 

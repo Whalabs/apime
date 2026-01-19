@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.0.7] - 2026-01-19
+### Corrigido
+- **Race condition no pareamento**: salvamento do JID agora é síncrono, garantindo que a sessão esteja persistida antes de liberar para uso.
+- Mensagens ficando em "Aguardando" após conectar instância: adicionado controle `sessionReady` que indica quando a sessão está pronta para enviar mensagens (após presence enviado).
+
+### Adicionado
+- Método `IsSessionReady()` no Manager para verificar se a sessão está completamente pronta para operações de envio.
+
+### Internals
+- Limpeza automática do estado `sessionReady` e `pairingSuccess` ao deletar sessão.
+
 ## [v1.0.6] - 2026-01-18
 ### Adicionado
 - Implementação de **Smart Debounce** para estabilização de conexão: desconexões acidentais são filtradas por 5 segundos antes de disparar webhook, enquanto desconexões intencionais (API/Logout) são notificadas imediatamente.
