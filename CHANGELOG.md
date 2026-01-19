@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.0.8] - 2026-01-19
+### Corrigido
+- **Botões expandir/recolher na documentação**: corrigido erro `SyntaxError: Unexpected token ')'` que impedia o funcionamento dos botões +/- nos cards de exemplo da página de documentação. O problema era causado por um `if` duplicado e variável `group` usada fora do escopo.
+
 ## [v1.0.7] - 2026-01-19
 ### Corrigido
 - **Race condition no pareamento**: salvamento do JID agora é síncrono, garantindo que a sessão esteja persistida antes de liberar para uso.

@@ -1287,8 +1287,6 @@ curl -X POST {{.BaseURL}}/api/users \
         if (targetLink) {
            const group = targetLink.closest('.nav-group');
            if (group) {
-             if (group) {
-
              group.classList.add('expanded');
            }
         }
@@ -1312,6 +1310,7 @@ curl -X POST {{.BaseURL}}/api/users \
           if (item.getAttribute('href').substring(1) === current) {
             item.classList.add('active');
             
+            const group = item.closest('.nav-group');
             if (group && !group.classList.contains('expanded')) {
               document.querySelectorAll('.nav-group.expanded').forEach(el => el.classList.remove('expanded'));
               group.classList.add('expanded');
