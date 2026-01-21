@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.0.9] - 2026-01-21
+### Adicionado
+- **Resolução inteligente de JIDs brasileiros**: os endpoints de envio de mensagens agora aceitam números "crus". O service consulta `IsOnWhatsApp` para decidir automaticamente se precisa inserir ou remover o nono dígito em números `+55`, reduzindo rejeições por formato incorreto (@internal/service/message/service.go#390-446, @internal/api/handler/message_handler.go#87-176).
+
+### Corrigido
+- **Envios presos em "Aguardando"**: o envio só prossegue depois que a sincronização `critical_block` sinaliza que as chaves E2E estão prontas; caso exceda 10s retornamos erro orientando o reenvio, evitando mensagens que nunca saem (@internal/service/message/service.go#128-171).
+
+### Ajustado
+- **Dashboard**: spinners dos botões foram padronizados para manter o feedback visual consistente em todas as telas (@internal/dashboard/templates/layout.tmpl, @internal/dashboard/templates/login.tmpl, @internal/dashboard/templates/users.tmpl).
+
 ## [v1.0.8] - 2026-01-19
 ### Corrigido
 - **Botões expandir/recolher na documentação**: corrigido erro `SyntaxError: Unexpected token ')'` que impedia o funcionamento dos botões +/- nos cards de exemplo da página de documentação. O problema era causado por um `if` duplicado e variável `group` usada fora do escopo.
