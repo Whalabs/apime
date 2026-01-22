@@ -39,6 +39,7 @@ type SessionManager interface {
 	GetClient(instanceID string) (*whatsmeow.Client, error)
 	IsSessionReady(instanceID string) bool
 	HasSession(instanceID string, jid types.JID) (bool, error)
+	GetPreKeyCount(instanceID string) (int, error)
 }
 
 func NewService(repo storage.MessageRepository, log *zap.Logger) *Service {
@@ -133,13 +134,16 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 	isReady := false
 	poked := false
 
-	for time.Since(readyStart) < 10*time.Second {
-		if s.sessionMgr.IsSessionReady(input.InstanceID) {
+	for time.Since(readyStart) < 20*time.Second {
+		preKeyCount, _ := s.sessionMgr.GetPreKeyCount(input.InstanceID)
+
+		if s.sessionMgr.IsSessionReady(input.InstanceID) && preKeyCount > 0 {
 			isReady = true
 			break
 		}
 
 		if time.Since(readyStart) > 2*time.Second && !poked {
+			s.log.Info("Sessão ainda não pronta, enviando presence de ativação...", zap.String("instance_id", input.InstanceID), zap.Int("prekeys", preKeyCount))
 			_ = client.SendPresence(ctx, types.PresenceAvailable)
 			poked = true
 		}

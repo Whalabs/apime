@@ -24,13 +24,26 @@ import (
 	"github.com/open-apime/apime/internal/storage/model"
 )
 
-type noopLogger struct{}
+type zapLogger struct {
+	log    *zap.Logger
+	module string
+}
 
-func (n *noopLogger) Debugf(msg string, args ...interface{}) {}
-func (n *noopLogger) Infof(msg string, args ...interface{})  {}
-func (n *noopLogger) Warnf(msg string, args ...interface{})  {}
-func (n *noopLogger) Errorf(msg string, args ...interface{}) {}
-func (n *noopLogger) Sub(module string) waLog.Logger         { return n }
+func (z *zapLogger) Debugf(msg string, args ...interface{}) {
+	z.log.Debug(fmt.Sprintf(msg, args...), zap.String("module", z.module))
+}
+func (z *zapLogger) Infof(msg string, args ...interface{}) {
+	z.log.Info(fmt.Sprintf(msg, args...), zap.String("module", z.module))
+}
+func (z *zapLogger) Warnf(msg string, args ...interface{}) {
+	z.log.Warn(fmt.Sprintf(msg, args...), zap.String("module", z.module))
+}
+func (z *zapLogger) Errorf(msg string, args ...interface{}) {
+	z.log.Error(fmt.Sprintf(msg, args...), zap.String("module", z.module))
+}
+func (z *zapLogger) Sub(module string) waLog.Logger {
+	return &zapLogger{log: z.log, module: module}
+}
 
 var (
 	deviceConfigMu sync.Mutex
@@ -135,6 +148,22 @@ func (m *Manager) IsSessionReady(instanceID string) bool {
 	return m.sessionReady[instanceID]
 }
 
+func (m *Manager) GetPreKeyCount(instanceID string) (int, error) {
+	m.mu.RLock()
+	client, exists := m.clients[instanceID]
+	m.mu.RUnlock()
+
+	if !exists || client == nil {
+		return 0, fmt.Errorf("instância não encontrada em memória")
+	}
+
+	if client.Store == nil || client.Store.PreKeys == nil {
+		return 0, fmt.Errorf("prekey store não disponível")
+	}
+
+	return client.Store.PreKeys.UploadedPreKeyCount(context.Background())
+}
+
 func (m *Manager) HasSession(instanceID string, jid types.JID) (bool, error) {
 	m.mu.RLock()
 	client, exists := m.clients[instanceID]
@@ -173,7 +202,7 @@ func (m *Manager) createSession(ctx context.Context, instanceID string, forceRec
 
 	m.log.Info("criando nova sessão WhatsMeow", zap.String("instance_id", instanceID))
 
-	clientLog := &noopLogger{}
+	clientLog := &zapLogger{log: m.log, module: "whatsmeow"}
 	var container *sqlstore.Container
 	var deviceStore *store.Device
 	var err error
@@ -517,7 +546,7 @@ func (m *Manager) RestoreSession(ctx context.Context, instanceID string, encrypt
 		return fmt.Errorf("whatsmeow: descriptografar: %w", err)
 	}
 
-	clientLog := &noopLogger{}
+	clientLog := &zapLogger{log: m.log, module: "whatsmeow"}
 	dbPath := fmt.Sprintf("file:%s?_foreign_keys=on", filepath.Join(m.baseDir, instanceID+".db"))
 	container, err := sqlstore.New(ctx, "sqlite3", dbPath, clientLog)
 	if err != nil {
@@ -648,7 +677,7 @@ func (m *Manager) deletePostgresSession(instanceID string) error {
 		return nil
 	}
 
-	container, err := sqlstore.New(ctx, "postgres", m.pgConnString, &noopLogger{})
+	container, err := sqlstore.New(ctx, "postgres", m.pgConnString, &zapLogger{log: m.log, module: "whatsmeow"})
 	if err != nil {
 		return fmt.Errorf("whatsmeow: criar container PostgreSQL: %w", err)
 	}
@@ -751,7 +780,7 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 		return client, nil
 	}
 
-	clientLog := &noopLogger{}
+	clientLog := &zapLogger{log: m.log, module: "whatsmeow"}
 	var container *sqlstore.Container
 	var deviceStore *store.Device
 	var err error
@@ -888,15 +917,30 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 		m.handleEvent(instanceID, evt)
 	})
 
-	// Conectar
+	// Conectar com retentativas
 	m.log.Debug("conectando cliente restaurado", zap.String("instance_id", instanceID))
-	err = client.Connect()
-	if err != nil {
-		m.log.Error("erro ao conectar cliente restaurado",
+	var connectErr error
+	for i := 0; i < 3; i++ {
+		connectErr = client.Connect()
+		if connectErr == nil {
+			break
+		}
+		m.log.Warn("falha na tentativa de conexão do cliente restaurado",
 			zap.String("instance_id", instanceID),
-			zap.Error(err),
+			zap.Int("tentativa", i+1),
+			zap.Error(connectErr))
+
+		if i < 2 {
+			time.Sleep(2 * time.Second)
+		}
+	}
+
+	if connectErr != nil {
+		m.log.Error("erro ao conectar cliente restaurado após retentativas",
+			zap.String("instance_id", instanceID),
+			zap.Error(connectErr),
 		)
-		return nil, fmt.Errorf("erro ao restaurar sessão: %w", err)
+		return nil, fmt.Errorf("erro ao restaurar sessão após 3 tentativas: %w", connectErr)
 	}
 
 	m.log.Debug("cliente conectado, verificando se está logado",
@@ -1102,7 +1146,7 @@ func (m *Manager) GetDiagnostics(instanceID string) interface{} {
 			diag.HasDeviceStore = true
 
 			ctx := context.Background()
-			container, err := sqlstore.New(ctx, "postgres", m.pgConnString, &noopLogger{})
+			container, err := sqlstore.New(ctx, "postgres", m.pgConnString, &zapLogger{log: m.log, module: "whatsmeow"})
 			if err == nil {
 				jid, err := types.ParseJID(inst.WhatsAppJID)
 				if err == nil {
@@ -1124,7 +1168,7 @@ func (m *Manager) GetDiagnostics(instanceID string) interface{} {
 
 			ctx := context.Background()
 			sqlitePath := fmt.Sprintf("file:%s?_foreign_keys=on", dbPath)
-			container, err := sqlstore.New(ctx, "sqlite3", sqlitePath, &noopLogger{})
+			container, err := sqlstore.New(ctx, "sqlite3", sqlitePath, &zapLogger{log: m.log, module: "whatsmeow"})
 			if err == nil {
 				deviceStore, err := container.GetFirstDevice(ctx)
 				if err == nil {
@@ -1297,35 +1341,39 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 		m.mu.RUnlock()
 		if exists && client != nil {
 			go func() {
-				for attempt := 1; attempt <= 5; attempt++ {
-					time.Sleep(time.Duration(attempt*2) * time.Second)
+				for attempt := 1; attempt <= 10; attempt++ {
+					time.Sleep(time.Duration(attempt) * time.Second)
 					if !client.IsLoggedIn() {
 						return
 					}
+					m.log.Debug("tentando enviar presence de ativação", zap.String("instance_id", instanceID), zap.Int("attempt", attempt))
 					if err := client.SendPresence(context.Background(), types.PresenceAvailable); err != nil {
-						if attempt == 5 {
-							m.log.Debug("PushName não sincronizado no Connected", zap.String("instance_id", instanceID))
+						m.log.Warn("falha ao enviar presence no Connected", zap.String("instance_id", instanceID), zap.Error(err))
+						if attempt == 10 {
+							m.log.Error("limite de tentativas de presence atingido", zap.String("instance_id", instanceID))
 						}
-						m.log.Info("presence enviado - instância totalmente ativa", zap.String("instance_id", instanceID))
-
-						go func() {
-							m.log.Debug("aguardando critical_block para marcar ready", zap.String("instance_id", instanceID))
-							time.Sleep(5 * time.Second)
-
-							m.mu.RLock()
-							isReady := m.sessionReady[instanceID]
-							m.mu.RUnlock()
-
-							if !isReady {
-								m.mu.Lock()
-								m.sessionReady[instanceID] = true
-								m.mu.Unlock()
-								m.log.Warn("safety timer: sessão marcada como pronta (critical_block demorou > 5s)",
-									zap.String("instance_id", instanceID))
-							}
-						}()
-						return
+						continue
 					}
+
+					m.log.Info("presence enviado com sucesso - aguardando sincronização de app state", zap.String("instance_id", instanceID))
+
+					go func() {
+						m.log.Debug("safety timer iniciado: aguardando critical_block", zap.String("instance_id", instanceID))
+						time.Sleep(20 * time.Second)
+
+						m.mu.RLock()
+						isReady := m.sessionReady[instanceID]
+						m.mu.RUnlock()
+
+						if !isReady {
+							m.mu.Lock()
+							m.sessionReady[instanceID] = true
+							m.mu.Unlock()
+							m.log.Warn("safety timer trigger: sessão marcada como pronta (critical_block excedeu 20s)",
+								zap.String("instance_id", instanceID))
+						}
+					}()
+					return
 				}
 
 				time.Sleep(5 * time.Second)
@@ -1472,14 +1520,15 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 			zap.String("name", string(v.Name)),
 		)
 
-		if v.Name == "critical_block" {
+		if v.Name == "critical_block" || v.Name == "critical_unblock_low" {
 			m.log.Info("sincronização crítica concluída - prekeys E2E prontas",
-				zap.String("instance_id", instanceID))
+				zap.String("instance_id", instanceID),
+				zap.String("sync_name", string(v.Name)))
 
 			m.mu.Lock()
 			m.sessionReady[instanceID] = true
 			m.mu.Unlock()
-			m.log.Info("sessão pronta para enviar mensagens (critical_block sync completo)",
+			m.log.Info("sessão pronta para enviar mensagens (app state sync completo)",
 				zap.String("instance_id", instanceID))
 		}
 	default:

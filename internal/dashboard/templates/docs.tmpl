@@ -1306,9 +1306,6 @@ curl -X POST {{.BaseURL}}/api/users \
             item.classList.add('active');
             var group = item.closest('.nav-group');
             if (group && !group.classList.contains('expanded')) {
-              document.querySelectorAll('.nav-group.expanded').forEach(function(el) {
-                el.classList.remove('expanded');
-              });
               group.classList.add('expanded');
             }
           }
