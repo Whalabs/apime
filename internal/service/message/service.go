@@ -38,6 +38,7 @@ type Service struct {
 type SessionManager interface {
 	GetClient(instanceID string) (*whatsmeow.Client, error)
 	IsSessionReady(instanceID string) bool
+	HasSession(instanceID string, jid types.JID) (bool, error)
 }
 
 func NewService(repo storage.MessageRepository, log *zap.Logger) *Service {
@@ -150,10 +151,29 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		return model.Message{}, fmt.Errorf("sessão indisponível para criptografia, tente novamente em instantes")
 	}
 
-	// Resolução inteligente de JID (consultando IsOnWhatsApp para BR)
 	toJID, err := s.resolveJID(ctx, client, input.To)
 	if err != nil {
 		return model.Message{}, fmt.Errorf("%w: %s", ErrInvalidJID, input.To)
+	}
+
+	if toJID.Server == types.DefaultUserServer || toJID.Server == types.HiddenUserServer {
+		hasSession, err := s.sessionMgr.HasSession(input.InstanceID, toJID)
+
+		_ = client.SendPresence(ctx, types.PresenceAvailable)
+
+		_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, types.ChatPresenceMediaText)
+
+		if err == nil && !hasSession {
+			s.log.Info("Nova sessão detectada...",
+				zap.String("instance_id", input.InstanceID),
+				zap.String("to", toJID.String()))
+
+			wait := 1500 + rand.Intn(1500)
+			time.Sleep(time.Duration(wait) * time.Millisecond)
+		} else {
+			wait := 500 + rand.Intn(700)
+			time.Sleep(time.Duration(wait) * time.Millisecond)
+		}
 	}
 
 	var waMessage *waE2E.Message

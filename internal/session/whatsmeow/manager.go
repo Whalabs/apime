@@ -135,6 +135,22 @@ func (m *Manager) IsSessionReady(instanceID string) bool {
 	return m.sessionReady[instanceID]
 }
 
+func (m *Manager) HasSession(instanceID string, jid types.JID) (bool, error) {
+	m.mu.RLock()
+	client, exists := m.clients[instanceID]
+	m.mu.RUnlock()
+
+	if !exists || client == nil {
+		return false, fmt.Errorf("instância não encontrada em memória")
+	}
+
+	if client.Store == nil || client.Store.Sessions == nil {
+		return false, fmt.Errorf("sessão store não disponível")
+	}
+
+	return client.Store.Sessions.HasSession(context.Background(), jid.SignalAddress().String())
+}
+
 func (m *Manager) CreateSession(ctx context.Context, instanceID string) (string, error) {
 	return m.createSession(ctx, instanceID, false)
 }
