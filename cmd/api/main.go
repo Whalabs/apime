@@ -68,7 +68,6 @@ func main() {
 		log.Fatalf("storage: %v", err)
 	}
 
-	// Build PostgreSQL connection string for WhatsMeow sessions (empty if using SQLite)
 	pgConnString := ""
 	if cfg.Storage.Driver == "postgres" {
 		pgConnString = cfg.DB.DSN()
@@ -105,7 +104,7 @@ func main() {
 
 	logr.Info("inicializando sistema de webhooks")
 	instanceWebhookChecker := &instanceCheckerAdapter{repo: repos.Instance}
-	eventHandler := webhook.NewEventHandler(repos.WebhookQueue, logr, mediaStorage, cfg.App.BaseURL, instanceWebhookChecker)
+	eventHandler := webhook.NewEventHandler(repos.WebhookQueue, logr, mediaStorage, repos.Message, cfg.App.BaseURL, instanceWebhookChecker)
 	sessionManager.SetEventHandler(eventHandler)
 	logr.Info("event handler configurado")
 

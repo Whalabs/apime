@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/open-apime/apime/internal/pkg/queue"
+	"github.com/open-apime/apime/internal/storage"
 	"github.com/open-apime/apime/internal/storage/media"
 )
 
@@ -24,15 +25,17 @@ type EventHandler struct {
 	queue           queue.Queue
 	log             *zap.Logger
 	mediaStorage    *media.Storage
+	messageRepo     storage.MessageRepository
 	apiBaseURL      string
 	instanceChecker InstanceChecker
 }
 
-func NewEventHandler(q queue.Queue, log *zap.Logger, mediaStorage *media.Storage, apiBaseURL string, instanceChecker InstanceChecker) *EventHandler {
+func NewEventHandler(q queue.Queue, log *zap.Logger, mediaStorage *media.Storage, messageRepo storage.MessageRepository, apiBaseURL string, instanceChecker InstanceChecker) *EventHandler {
 	return &EventHandler{
 		queue:           q,
 		log:             log,
 		mediaStorage:    mediaStorage,
+		messageRepo:     messageRepo,
 		apiBaseURL:      apiBaseURL,
 		instanceChecker: instanceChecker,
 	}
@@ -45,6 +48,22 @@ func (h *EventHandler) Handle(ctx context.Context, instanceID string, instanceJI
 	}
 
 	h.log.Debug("[dispatcher] processando evento para webhook", zap.String("instance", instanceID), zap.String("type", fmt.Sprintf("%T", evt)))
+
+	if receipt, ok := evt.(*events.Receipt); ok {
+		status := string(receipt.Type)
+		for _, msgID := range receipt.MessageIDs {
+			if err := h.messageRepo.UpdateStatusByWhatsAppID(ctx, msgID, status); err != nil {
+				h.log.Warn("[dispatcher] erro ao atualizar status da mensagem via receipt",
+					zap.String("msg_id", msgID),
+					zap.String("status", status),
+					zap.Error(err))
+			} else {
+				h.log.Debug("[dispatcher] status da mensagem atualizado via receipt",
+					zap.String("msg_id", msgID),
+					zap.String("status", status))
+			}
+		}
+	}
 
 	normalized := h.normalizeEvent(ctx, instanceID, client, evt)
 

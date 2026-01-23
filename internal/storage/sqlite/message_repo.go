@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"time"
 
@@ -32,12 +33,12 @@ func (r *messageRepo) Create(ctx context.Context, msg model.Message) (model.Mess
 	}
 
 	query := `
-		INSERT INTO message_queue (id, instance_id, recipient, type, payload, status, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO message_queue (id, instance_id, whatsapp_id, recipient, type, payload, status, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err = r.db.Conn.ExecContext(ctx, query,
-		msg.ID, msg.InstanceID, msg.To, msg.Type, string(payloadJSON), msg.Status, msg.CreatedAt.Format(time.RFC3339),
+		msg.ID, msg.InstanceID, msg.WhatsAppID, msg.To, msg.Type, string(payloadJSON), msg.Status, msg.CreatedAt.Format(time.RFC3339),
 	)
 
 	if err != nil {
@@ -49,7 +50,7 @@ func (r *messageRepo) Create(ctx context.Context, msg model.Message) (model.Mess
 
 func (r *messageRepo) ListByInstance(ctx context.Context, instanceID string) ([]model.Message, error) {
 	query := `
-		SELECT id, instance_id, recipient, type, payload, status, created_at
+		SELECT id, instance_id, whatsapp_id, recipient, type, payload, status, delivered_at, created_at
 		FROM message_queue
 		WHERE instance_id = ?
 		ORDER BY created_at DESC
@@ -67,11 +68,18 @@ func (r *messageRepo) ListByInstance(ctx context.Context, instanceID string) ([]
 		var msg model.Message
 		var payloadStr string
 		var createdAt string
+		var whatsappID, deliveredAt sql.NullString
 
 		if err := rows.Scan(
-			&msg.ID, &msg.InstanceID, &msg.To, &msg.Type, &payloadStr, &msg.Status, &createdAt,
+			&msg.ID, &msg.InstanceID, &whatsappID, &msg.To, &msg.Type, &payloadStr, &msg.Status, &deliveredAt, &createdAt,
 		); err != nil {
 			return nil, err
+		}
+
+		msg.WhatsAppID = whatsappID.String
+		if deliveredAt.Valid {
+			t, _ := time.Parse(time.RFC3339, deliveredAt.String)
+			msg.DeliveredAt = &t
 		}
 
 		var payloadMap map[string]interface{}
@@ -93,12 +101,28 @@ func (r *messageRepo) ListByInstance(ctx context.Context, instanceID string) ([]
 }
 
 func (r *messageRepo) Update(ctx context.Context, msg model.Message) error {
+	var deliveredAt interface{}
+	if msg.DeliveredAt != nil {
+		deliveredAt = msg.DeliveredAt.Format(time.RFC3339)
+	}
+
 	query := `
 		UPDATE message_queue
-		SET status = ?
+		SET status = ?, whatsapp_id = ?, delivered_at = ?
 		WHERE id = ?
 	`
-	_, err := r.db.Conn.ExecContext(ctx, query, msg.Status, msg.ID)
+	_, err := r.db.Conn.ExecContext(ctx, query, msg.Status, msg.WhatsAppID, deliveredAt, msg.ID)
+	return err
+}
+
+func (r *messageRepo) UpdateStatusByWhatsAppID(ctx context.Context, whatsappID string, status string) error {
+	deliveredAt := time.Now().Format(time.RFC3339)
+	query := `
+		UPDATE message_queue
+		SET status = ?, delivered_at = ?
+		WHERE whatsapp_id = ?
+	`
+	_, err := r.db.Conn.ExecContext(ctx, query, status, deliveredAt, whatsappID)
 	return err
 }
 

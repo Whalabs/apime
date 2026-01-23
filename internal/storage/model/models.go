@@ -31,13 +31,15 @@ type Instance struct {
 }
 
 type Message struct {
-	ID         string    `json:"id"`
-	InstanceID string    `json:"instanceId"`
-	To         string    `json:"to"`
-	Type       string    `json:"type"`
-	Payload    string    `json:"payload"`
-	Status     string    `json:"status"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID         string     `json:"id"`
+	InstanceID string     `json:"instanceId"`
+	WhatsAppID string     `json:"whatsappId,omitempty"`
+	To         string     `json:"to"`
+	Type       string     `json:"type"`
+	Payload    string     `json:"payload"`
+	Status     string     `json:"status"`
+	DeliveredAt *time.Time `json:"deliveredAt,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
 }
 
 type EventLog struct {

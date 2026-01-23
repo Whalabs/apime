@@ -32,20 +32,25 @@ func (r *messageRepo) Create(ctx context.Context, msg model.Message) (model.Mess
 	}
 
 	query := `
-		INSERT INTO message_queue (id, instance_id, recipient, type, payload, status, created_at)
-		VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
-		RETURNING id, instance_id, recipient, type, payload, status, created_at
+		INSERT INTO message_queue (id, instance_id, whatsapp_id, recipient, type, payload, status, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+		RETURNING id, instance_id, whatsapp_id, recipient, type, payload, status, created_at
 	`
 
 	var payloadBytes []byte
+	var whatsappID *string
 	err = r.db.Pool.QueryRow(ctx, query,
-		msg.ID, msg.InstanceID, msg.To, msg.Type, payloadJSON, msg.Status, msg.CreatedAt,
+		msg.ID, msg.InstanceID, msg.WhatsAppID, msg.To, msg.Type, payloadJSON, msg.Status, msg.CreatedAt,
 	).Scan(
-		&msg.ID, &msg.InstanceID, &msg.To, &msg.Type, &payloadBytes, &msg.Status, &msg.CreatedAt,
+		&msg.ID, &msg.InstanceID, &whatsappID, &msg.To, &msg.Type, &payloadBytes, &msg.Status, &msg.CreatedAt,
 	)
 
 	if err != nil {
 		return model.Message{}, err
+	}
+
+	if whatsappID != nil {
+		msg.WhatsAppID = *whatsappID
 	}
 
 	var payloadMap map[string]interface{}
@@ -53,7 +58,6 @@ func (r *messageRepo) Create(ctx context.Context, msg model.Message) (model.Mess
 		if text, ok := payloadMap["text"].(string); ok {
 			msg.Payload = text
 		} else {
-			// Se não tiver campo "text", usar o JSON como string
 			msg.Payload = string(payloadBytes)
 		}
 	} else {
@@ -65,7 +69,7 @@ func (r *messageRepo) Create(ctx context.Context, msg model.Message) (model.Mess
 
 func (r *messageRepo) ListByInstance(ctx context.Context, instanceID string) ([]model.Message, error) {
 	query := `
-		SELECT id, instance_id, recipient, type, payload, status, created_at
+		SELECT id, instance_id, whatsapp_id, recipient, type, payload, status, delivered_at, created_at
 		FROM message_queue
 		WHERE instance_id = $1
 		ORDER BY created_at DESC
@@ -82,10 +86,15 @@ func (r *messageRepo) ListByInstance(ctx context.Context, instanceID string) ([]
 	for rows.Next() {
 		var msg model.Message
 		var payloadBytes []byte
+		var whatsappID *string
 		if err := rows.Scan(
-			&msg.ID, &msg.InstanceID, &msg.To, &msg.Type, &payloadBytes, &msg.Status, &msg.CreatedAt,
+			&msg.ID, &msg.InstanceID, &whatsappID, &msg.To, &msg.Type, &payloadBytes, &msg.Status, &msg.DeliveredAt, &msg.CreatedAt,
 		); err != nil {
 			return nil, err
+		}
+
+		if whatsappID != nil {
+			msg.WhatsAppID = *whatsappID
 		}
 
 		var payloadMap map[string]interface{}
@@ -108,10 +117,20 @@ func (r *messageRepo) ListByInstance(ctx context.Context, instanceID string) ([]
 func (r *messageRepo) Update(ctx context.Context, msg model.Message) error {
 	query := `
 		UPDATE message_queue
-		SET status = $1
-		WHERE id = $2
+		SET status = $1, whatsapp_id = $2, delivered_at = $3
+		WHERE id = $4
 	`
-	_, err := r.db.Pool.Exec(ctx, query, msg.Status, msg.ID)
+	_, err := r.db.Pool.Exec(ctx, query, msg.Status, msg.WhatsAppID, msg.DeliveredAt, msg.ID)
+	return err
+}
+
+func (r *messageRepo) UpdateStatusByWhatsAppID(ctx context.Context, whatsappID string, status string) error {
+	query := `
+		UPDATE message_queue
+		SET status = $1, delivered_at = NOW()
+		WHERE whatsapp_id = $2
+	`
+	_, err := r.db.Pool.Exec(ctx, query, status, whatsappID)
 	return err
 }
 

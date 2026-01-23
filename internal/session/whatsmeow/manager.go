@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/lib/pq"           // PostgreSQL driver for WhatsMeow sessions
-	_ "github.com/mattn/go-sqlite3" // SQLite driver for WhatsMeow sessions
+	_ "github.com/lib/pq"           
+	_ "github.com/mattn/go-sqlite3" 
 	"go.mau.fi/whatsmeow"
 	waCompanionReg "go.mau.fi/whatsmeow/proto/waCompanionReg"
 	"go.mau.fi/whatsmeow/store"
@@ -106,14 +106,14 @@ func NewManager(log *zap.Logger, encKey, storageDriver, baseDir, pgConnString st
 	}
 }
 
-// SetStatusChangeCallback registra o callback de status de instância.
+
 func (m *Manager) SetStatusChangeCallback(fn func(instanceID string, status string)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onStatusChange = fn
 }
 
-// SetEventHandler registra o handler de eventos (ex.: webhooks).
+
 func (m *Manager) SetEventHandler(handler EventHandler) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -121,13 +121,13 @@ func (m *Manager) SetEventHandler(handler EventHandler) {
 	m.log.Info("event handler configurado para webhooks")
 }
 
-// SessionStorageInfo contains information about session storage for dashboard display.
+
 type SessionStorageInfo struct {
-	Type     string // "sqlite" or "postgres"
-	Location string // file path for SQLite, table name for PostgreSQL
+	Type     string
+	Location string
 }
 
-// GetSessionStorageInfo returns information about session storage for an instance.
+
 func (m *Manager) GetSessionStorageInfo(instanceID string) SessionStorageInfo {
 	if m.storageDriver == "postgres" && m.pgConnString != "" {
 		return SessionStorageInfo{
@@ -587,7 +587,7 @@ func (m *Manager) logoutClient(instanceID string, client *whatsmeow.Client) {
 	)
 }
 
-// Disconnect encerra a sessão atual removendo também o store associado.
+
 func (m *Manager) Disconnect(instanceID string) error {
 	return m.DeleteSession(instanceID)
 }
@@ -596,7 +596,7 @@ func (m *Manager) DeleteSession(instanceID string) error {
 	var client *whatsmeow.Client
 
 	m.mu.Lock()
-	m.expectedDisconnect[instanceID] = true // Marca como intencional para evitar debounce
+	m.expectedDisconnect[instanceID] = true 
 	if cancel, exists := m.qrContexts[instanceID]; exists {
 		cancel()
 		delete(m.qrContexts, instanceID)
@@ -610,12 +610,12 @@ func (m *Manager) DeleteSession(instanceID string) error {
 	delete(m.pairingSuccess, instanceID)
 	m.mu.Unlock()
 
-	// Se o cliente não estiver em memória, tentar restaurar para realizar o logout
+	
 	if client == nil {
 		m.log.Debug("cliente não encontrado em memória, tentando restaurar para logout", zap.String("instance_id", instanceID))
 		if restoredClient, err := m.restoreSessionIfExists(context.Background(), instanceID); err == nil && restoredClient != nil {
 			client = restoredClient
-			// Remove do map novamente pois restoreSessionIfExists adiciona
+			
 			m.mu.Lock()
 			delete(m.clients, instanceID)
 			delete(m.sessionReady, instanceID)
@@ -722,20 +722,20 @@ func (m *Manager) GetClient(instanceID string) (*whatsmeow.Client, error) {
 		m.log.Debug("cliente encontrado no map",
 			zap.String("instance_id", instanceID),
 		)
-		// Verificar se o cliente está realmente logado
+		
 		isLoggedIn := client.IsLoggedIn()
 		if !isLoggedIn {
 			m.log.Warn("cliente existe mas não está logado, verificando status de pareamento",
 				zap.String("instance_id", instanceID),
 			)
 
-			// Verificar se há contexto de QR ativo ou pareamento recente
+			
 			m.mu.RLock()
 			_, hasQR := m.qrContexts[instanceID]
 			pairingTime, hasPairing := m.pairingSuccess[instanceID]
 			m.mu.RUnlock()
 
-			// Se tiver QR ativo ou pareamento recente (menos de 60s), não deleta
+			
 			if hasQR {
 				m.log.Debug("contexto QR ativo, mantendo cliente no map", zap.String("instance_id", instanceID))
 				return client, nil
@@ -749,11 +749,11 @@ func (m *Manager) GetClient(instanceID string) (*whatsmeow.Client, error) {
 			}
 
 			m.log.Warn("cliente sem sessão ativa e sem pareamento recente, removendo", zap.String("instance_id", instanceID))
-			// Remover do map e tentar restaurar
+			
 			m.mu.Lock()
 			delete(m.clients, instanceID)
 			m.mu.Unlock()
-			// Tentar restaurar novamente
+			
 			return m.restoreSessionIfExists(context.Background(), instanceID)
 		}
 		m.log.Debug("cliente está logado e pronto",
@@ -766,16 +766,16 @@ func (m *Manager) GetClient(instanceID string) (*whatsmeow.Client, error) {
 		zap.String("instance_id", instanceID),
 	)
 
-	// Tentar restaurar sessão do SQLite
+	
 	return m.restoreSessionIfExists(context.Background(), instanceID)
 }
 
-// restoreSessionIfExists tenta restaurar uma sessão existente do SQLite ou PostgreSQL
+
 func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string) (*whatsmeow.Client, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Verificar novamente após lock (pode ter sido adicionado por outra goroutine)
+	
 	if client, exists := m.clients[instanceID]; exists {
 		return client, nil
 	}
@@ -785,7 +785,7 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 	var deviceStore *store.Device
 	var err error
 
-	// Use PostgreSQL or SQLite based on storage driver
+	
 	if m.storageDriver == "postgres" && m.pgConnString != "" {
 		m.log.Info("tentando restaurar sessão do PostgreSQL",
 			zap.String("instance_id", instanceID),
@@ -858,7 +858,7 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 	} else {
 		dbPath := filepath.Join(m.baseDir, instanceID+".db")
 
-		// Verificar se o arquivo existe
+		
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			return nil, fmt.Errorf("sessão não encontrada")
 		}
@@ -889,7 +889,7 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 		}
 	}
 
-	// Verificar se a sessão está logada (tem JID)
+	
 	if deviceStore.ID == nil || deviceStore.ID.IsEmpty() {
 		m.log.Warn("sessão não está logada (sem JID)",
 			zap.String("instance_id", instanceID),
@@ -904,20 +904,20 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 		zap.String("push_name", deviceStore.PushName),
 	)
 
-	// Aplicar configurações de dispositivo ANTES de criar o client
+	
 	if err := m.applyDeviceConfig(ctx, deviceStore); err != nil {
 		m.log.Warn("erro ao aplicar configurações de dispositivo", zap.String("instance_id", instanceID), zap.Error(err))
-		// Continuar mesmo com erro (usar valores padrão)
+		
 	}
 
 	client := whatsmeow.NewClient(deviceStore, clientLog)
 
-	// Adicionar event handler
+	
 	client.AddEventHandler(func(evt any) {
 		m.handleEvent(instanceID, evt)
 	})
 
-	// Conectar com retentativas
+	
 	m.log.Debug("conectando cliente restaurado", zap.String("instance_id", instanceID))
 	var connectErr error
 	for i := 0; i < 3; i++ {
@@ -947,8 +947,7 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 		zap.String("instance_id", instanceID),
 	)
 
-	// Aguardar um pouco para garantir que a conexão foi estabelecida
-	// e verificar se está realmente logado
+	
 	time.Sleep(1 * time.Second)
 	isLoggedIn := client.IsLoggedIn()
 	m.log.Debug("verificação inicial de login",
@@ -960,8 +959,7 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 		m.log.Warn("cliente restaurado mas não está logado ainda, aguardando...",
 			zap.String("instance_id", instanceID),
 		)
-		// Não retornar erro ainda - pode estar conectando
-		// Aguardar mais um pouco
+		
 		time.Sleep(2 * time.Second)
 		isLoggedIn = client.IsLoggedIn()
 		m.log.Debug("verificação após espera",
@@ -972,7 +970,7 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 			m.log.Error("cliente restaurado não conseguiu fazer login após espera",
 				zap.String("instance_id", instanceID),
 			)
-			// Atualizar status no banco se tiver instanceRepo
+			
 			if m.instanceRepo != nil {
 				inst, err := m.instanceRepo.GetByID(ctx, instanceID)
 				if err == nil {
@@ -987,10 +985,10 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 		}
 	}
 
-	// Adicionar ao map
+	
 	m.clients[instanceID] = client
 
-	// Enviar presence após conexão bem-sucedida (com retry)
+	
 	go func() {
 		for attempt := 1; attempt <= 5; attempt++ {
 			time.Sleep(time.Duration(attempt*2) * time.Second)
@@ -1022,8 +1020,7 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 	return client, nil
 }
 
-// RestoreAllSessions tenta restaurar todas as sessões que têm arquivo SQLite válido
-// independente do status no banco de dados
+
 func (m *Manager) RestoreAllSessions(ctx context.Context, instanceIDs []string) {
 	m.log.Info("iniciando restauração de todas as sessões",
 		zap.Int("total_instances", len(instanceIDs)),
@@ -1031,7 +1028,7 @@ func (m *Manager) RestoreAllSessions(ctx context.Context, instanceIDs []string) 
 	)
 
 	for _, instanceID := range instanceIDs {
-		// Verificar se já existe em memória
+		
 		m.mu.RLock()
 		client, exists := m.clients[instanceID]
 		m.mu.RUnlock()
@@ -1043,7 +1040,7 @@ func (m *Manager) RestoreAllSessions(ctx context.Context, instanceIDs []string) 
 			continue
 		}
 
-		// Para SQLite, verificar se existe arquivo
+		
 		if m.storageDriver != "postgres" {
 			dbPath := filepath.Join(m.baseDir, instanceID+".db")
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
@@ -1053,9 +1050,9 @@ func (m *Manager) RestoreAllSessions(ctx context.Context, instanceIDs []string) 
 				continue
 			}
 		}
-		// Para PostgreSQL, sempre tenta restaurar (a sessão pode existir no banco)
+		
 
-		// Tentar restaurar em background (não bloquear a inicialização)
+		
 		go func(id string) {
 			client, err := m.restoreSessionIfExists(ctx, id)
 			if err != nil {
@@ -1063,7 +1060,7 @@ func (m *Manager) RestoreAllSessions(ctx context.Context, instanceIDs []string) 
 					zap.String("instance_id", id),
 					zap.Error(err),
 				)
-				// O callback será chamado pelo handleEvent se houver erro
+				
 				return
 			}
 
@@ -1071,7 +1068,7 @@ func (m *Manager) RestoreAllSessions(ctx context.Context, instanceIDs []string) 
 				m.log.Info("sessão restaurada com sucesso na inicialização",
 					zap.String("instance_id", id),
 				)
-				// O callback será chamado automaticamente pelo handleEvent
+				
 			}
 		}(instanceID)
 	}
@@ -1079,7 +1076,7 @@ func (m *Manager) RestoreAllSessions(ctx context.Context, instanceIDs []string) 
 	m.log.Info("restauração de sessões iniciada em background")
 }
 
-// DiagnosticsInfo contém informações de diagnóstico sobre uma instância
+
 type DiagnosticsInfo struct {
 	InstanceID           string     `json:"instanceId"`
 	HasClientInMemory    bool       `json:"hasClientInMemory"`
@@ -1102,7 +1099,7 @@ type DiagnosticsInfo struct {
 	PendingPayloads      int        `json:"pendingPayloads"`
 }
 
-// GetDiagnostics retorna informações de diagnóstico sobre uma instância
+
 func (m *Manager) GetDiagnostics(instanceID string) interface{} {
 	diag := DiagnosticsInfo{
 		InstanceID: instanceID,
@@ -1121,12 +1118,12 @@ func (m *Manager) GetDiagnostics(instanceID string) interface{} {
 		diag.ClientConnected = client.IsLoggedIn()
 	}
 
-	// Set storage info
+	
 	storageInfo := m.GetSessionStorageInfo(instanceID)
 	diag.StorageType = storageInfo.Type
 	diag.StorageLocation = storageInfo.Location
 
-	// Buscar informações da instância (history sync e JID)
+	
 	var inst *model.Instance
 	if m.instanceRepo != nil {
 		ctx := context.Background()
@@ -1138,9 +1135,9 @@ func (m *Manager) GetDiagnostics(instanceID string) interface{} {
 		}
 	}
 
-	// Verificar device store baseado no driver de storage
+	
 	if m.storageDriver == "postgres" && m.pgConnString != "" {
-		// PostgreSQL: usar JID salvo na instância
+		
 		if inst != nil && inst.WhatsAppJID != "" {
 			diag.DeviceJID = inst.WhatsAppJID
 			diag.HasDeviceStore = true
@@ -1158,7 +1155,6 @@ func (m *Manager) GetDiagnostics(instanceID string) interface{} {
 			}
 		}
 	} else {
-		// SQLite: verificar arquivo de sessão
 		dbPath := filepath.Join(m.baseDir, instanceID+".db")
 		if fileInfo, err := os.Stat(dbPath); err == nil {
 			diag.HasSQLiteFile = true
@@ -1211,7 +1207,7 @@ func (m *Manager) SaveSessionBlob(instanceID string) ([]byte, error) {
 	return encrypted, nil
 }
 
-// mapPlatformType mapeia string do banco para enum do WhatsMeow
+
 func mapPlatformType(platformType string) *waCompanionReg.DeviceProps_PlatformType {
 	switch platformType {
 	case "CHROME":
@@ -1295,7 +1291,7 @@ func (m *Manager) applyDevicePropsForRegistration(ctx context.Context, config mo
 	}()
 }
 
-// handleEvent processa eventos do WhatsMeow.
+
 func (m *Manager) handleEvent(instanceID string, evt any) {
 	m.mu.RLock()
 	callback := m.onStatusChange
@@ -1316,6 +1312,17 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 		}
 	}
 
+	
+	if receipt, ok := evt.(*events.Receipt); ok {
+		if receipt.Type == types.ReceiptTypeDelivered || receipt.Type == types.ReceiptTypeRead || receipt.Type == types.ReceiptTypePlayed {
+			m.log.Debug("receipt recebido",
+				zap.String("instance_id", instanceID),
+				zap.String("type", string(receipt.Type)),
+				zap.Int("message_count", len(receipt.MessageIDs)))
+			
+		}
+	}
+
 	switch v := evt.(type) {
 	case *events.Connected:
 		m.log.Info("instância conectada - dispositivo liberado, sincronizando dados essenciais em background",
@@ -1325,12 +1332,11 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 		if timer, exists := m.disconnectDebounce[instanceID]; exists {
 			timer.Stop()
 			delete(m.disconnectDebounce, instanceID)
-			m.log.Info("instabilidade de rede detectada e ignorada (conectou dentro do grace period)", zap.String("instance_id", instanceID))
-			m.mu.Unlock()
-			return
+			m.log.Info("reconexão silenciosa detectada (instabilidade de rede recuperada)", zap.String("instance_id", instanceID))
 		}
 		m.expectedDisconnect[instanceID] = false
 		m.mu.Unlock()
+
 
 		if handler != nil {
 			go handler.Handle(context.Background(), instanceID, instanceJID, client, v)
@@ -1531,8 +1537,32 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 			m.log.Info("sessão pronta para enviar mensagens (app state sync completo)",
 				zap.String("instance_id", instanceID))
 		}
+	case *events.StreamReplaced:
+		m.log.Warn("stream substituído pelo servidor - limpando cache de dispositivos",
+			zap.String("instance_id", instanceID))
+
+
+		if client != nil {
+
+			go func() {
+				time.Sleep(2 * time.Second)
+				if client.IsLoggedIn() {
+					_ = client.SendPresence(context.Background(), types.PresenceAvailable)
+					m.log.Debug("presence reenviado após stream replaced", zap.String("instance_id", instanceID))
+				}
+			}()
+		}
+	case *events.KeepAliveTimeout:
+		m.log.Warn("keepalive timeout detectado - possível reconexão iminente",
+			zap.String("instance_id", instanceID),
+			zap.Int("error_count", v.ErrorCount))
+	case *events.KeepAliveRestored:
+		m.log.Info("keepalive restaurado - limpando cache de dispositivos",
+			zap.String("instance_id", instanceID))
+
+		
 	default:
-		// Outros eventos não tratados explicitamente
+		
 		m.log.Debug("evento recebido",
 			zap.String("instance_id", instanceID),
 			zap.String("event_type", fmt.Sprintf("%T", evt)),
@@ -1540,7 +1570,121 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 	}
 }
 
-// updateInstanceStatus atualiza o status da instância no banco de dados
+
+func (m *Manager) FetchUserDevices(ctx context.Context, instanceID string, jids []string) error {
+	m.mu.RLock()
+	client, exists := m.clients[instanceID]
+	m.mu.RUnlock()
+
+	if !exists || client == nil {
+		return fmt.Errorf("cliente não encontrado")
+	}
+
+	parsedJIDs := make([]types.JID, 0, len(jids))
+	for _, j := range jids {
+		jid, err := types.ParseJID(j)
+		if err == nil {
+			parsedJIDs = append(parsedJIDs, jid)
+		}
+	}
+
+	if len(parsedJIDs) == 0 {
+		return nil
+	}
+
+
+	devices, err := client.GetUserDevices(ctx, parsedJIDs)
+	if err != nil {
+		m.log.Error("erro ao buscar dispositivos dos usuários",
+			zap.String("instance_id", instanceID),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	m.log.Debug("lista de dispositivos atualizada com sucesso",
+		zap.String("instance_id", instanceID),
+		zap.Int("count", len(devices)),
+	)
+	return nil
+}
+
+
+func (m *Manager) ClearDeviceCache(instanceID string, jidStr string) error {
+	m.mu.RLock()
+	client, exists := m.clients[instanceID]
+	m.mu.RUnlock()
+
+	if !exists || client == nil {
+		return fmt.Errorf("cliente não encontrado")
+	}
+
+	if _, err := types.ParseJID(jidStr); err != nil {
+		return err
+	}
+
+	
+
+	m.log.Debug("cache de dispositivos limpo",
+		zap.String("instance_id", instanceID),
+		zap.String("jid", jidStr),
+	)
+	return nil
+}
+
+
+func (m *Manager) SendChatPresence(ctx context.Context, instanceID, jidStr string, state types.Presence) error {
+	m.mu.RLock()
+	client, exists := m.clients[instanceID]
+	m.mu.RUnlock()
+
+	if !exists || client == nil || !client.IsLoggedIn() {
+		return fmt.Errorf("cliente não conectado")
+	}
+
+	jid, err := types.ParseJID(jidStr)
+	if err != nil {
+		return err
+	}
+
+	
+	return client.SendChatPresence(ctx, jid, types.ChatPresence(state), types.ChatPresenceMediaText)
+}
+
+
+func (m *Manager) ResetContactSession(ctx context.Context, instanceID, jidStr string) error {
+	m.mu.RLock()
+	client, exists := m.clients[instanceID]
+	m.mu.RUnlock()
+
+	if !exists || client == nil || client.Store == nil {
+		return fmt.Errorf("store não disponível")
+	}
+
+	jid, err := types.ParseJID(jidStr)
+	if err != nil {
+		return err
+	}
+
+	
+	err = client.Store.Sessions.DeleteSession(ctx, jid.User+"@"+jid.Server)
+	if err != nil {
+		m.log.Error("erro ao resetar sessão do contato",
+			zap.String("instance_id", instanceID),
+			zap.String("target_jid", jidStr),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	m.log.Info("sessão de criptografia resetada para o contato",
+		zap.String("instance_id", instanceID),
+		zap.String("target_jid", jidStr),
+	)
+	return nil
+}
+
+
 func (m *Manager) updateInstanceStatus(instanceID string, status model.InstanceStatus) {
 	if m.instanceRepo == nil {
 		return
@@ -1569,4 +1713,16 @@ func (m *Manager) updateInstanceStatus(instanceID string, status model.InstanceS
 			zap.String("status", string(status)),
 		)
 	}
+}
+
+
+func (m *Manager) ListInstances() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	ids := make([]string, 0, len(m.clients))
+	for id := range m.clients {
+		ids = append(ids, id)
+	}
+	return ids
 }

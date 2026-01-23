@@ -24,6 +24,7 @@ type MessageRepository interface {
 	Create(ctx context.Context, message model.Message) (model.Message, error)
 	ListByInstance(ctx context.Context, instanceID string) ([]model.Message, error)
 	Update(ctx context.Context, msg model.Message) error
+	UpdateStatusByWhatsAppID(ctx context.Context, whatsappID string, status string) error
 	DeleteByInstanceID(ctx context.Context, instanceID string) error
 }
 

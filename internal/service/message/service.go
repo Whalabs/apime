@@ -134,10 +134,10 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 	isReady := false
 	poked := false
 
-	for time.Since(readyStart) < 20*time.Second {
+	for time.Since(readyStart) < 30*time.Second {
 		preKeyCount, _ := s.sessionMgr.GetPreKeyCount(input.InstanceID)
 
-		if s.sessionMgr.IsSessionReady(input.InstanceID) && preKeyCount > 0 {
+		if s.sessionMgr.IsSessionReady(input.InstanceID) && preKeyCount > 5 {
 			isReady = true
 			break
 		}
@@ -148,12 +148,14 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			poked = true
 		}
 
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 	}
 
 	if !isReady {
-		return model.Message{}, fmt.Errorf("sessão indisponível para criptografia, tente novamente em instantes")
+		return model.Message{}, fmt.Errorf("sessão indisponível para criptografia (pode levar alguns instantes após conectar), tente novamente")
 	}
+
+	time.Sleep(1500 * time.Millisecond)
 
 	toJID, err := s.resolveJID(ctx, client, input.To)
 	if err != nil {
@@ -166,6 +168,23 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		_ = client.SendPresence(ctx, types.PresenceAvailable)
 
 		_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, types.ChatPresenceMediaText)
+
+		s.log.Debug("buscando dispositivos do destinatário antes do envio",
+			zap.String("instance_id", input.InstanceID),
+			zap.String("to", toJID.String()))
+
+		devices, devErr := client.GetUserDevices(ctx, []types.JID{toJID})
+		if devErr != nil {
+			s.log.Warn("erro ao buscar dispositivos do destinatário",
+				zap.String("to", toJID.String()),
+				zap.Error(devErr))
+		} else {
+			s.log.Debug("dispositivos do destinatário atualizados",
+				zap.String("to", toJID.String()),
+				zap.Int("device_count", len(devices)))
+
+			time.Sleep(800 * time.Millisecond)
+		}
 
 		if err == nil && !hasSession {
 			s.log.Info("Nova sessão detectada...",
@@ -200,7 +219,6 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			return model.Message{}, ErrInvalidPayload
 		}
 
-		// Determinar tipo de mídia do WhatsMeow
 		var mediaType whatsmeow.MediaType
 		if input.Type == "image" {
 			mediaType = whatsmeow.MediaImage
@@ -208,13 +226,11 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			mediaType = whatsmeow.MediaVideo
 		}
 
-		// Upload da mídia
 		uploadResp, err := client.Upload(ctx, input.MediaData, mediaType)
 		if err != nil {
 			return model.Message{}, fmt.Errorf("erro ao fazer upload da mídia: %w", err)
 		}
 
-		// Construir mensagem de mídia
 		if input.Type == "image" {
 			imageMsg := &waE2E.ImageMessage{
 				URL:           &uploadResp.URL,
@@ -256,24 +272,16 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			return model.Message{}, ErrInvalidPayload
 		}
 
-		// Upload do áudio
 		uploadResp, err := client.Upload(ctx, input.MediaData, whatsmeow.MediaAudio)
 		if err != nil {
 			return model.Message{}, fmt.Errorf("erro ao fazer upload do áudio: %w", err)
 		}
-		// Determinar se é PTT (voice message)
-		// Alteração: Usar APENAS a flag explícita para dar controle total
 		isPTT := input.PTT
-		// || strings.HasPrefix(input.MediaType, "audio/ogg") || strings.Contains(input.MediaType, "opus")
 
-		// || strings.HasPrefix(input.MediaType, "audio/ogg") || strings.Contains(input.MediaType, "opus")
-
-		// Se for PTT, usar Waveform gerada, mas com visual agradável
 		var waveform []byte
 		var sidecar []byte
 
 		if isPTT {
-			// Gerar Waveform
 			waveform = make([]byte, 64)
 			for i := 0; i < 64; i++ {
 				distFromCenter := math.Abs(float64(i) - 31.5)
@@ -298,7 +306,6 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			sidecar = make([]byte, 16)
 		}
 
-		// Fix: WhatsApp exige mimetype explicito para OGG Opus como PTT
 		finalMimeType := input.MediaType
 		if isPTT && strings.Contains(input.MediaType, "audio/ogg") {
 			finalMimeType = "audio/ogg; codecs=opus"
@@ -332,16 +339,13 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			return model.Message{}, ErrInvalidPayload
 		}
 
-		// Upload do documento
 		uploadResp, err := client.Upload(ctx, input.MediaData, whatsmeow.MediaDocument)
 		if err != nil {
 			return model.Message{}, fmt.Errorf("erro ao fazer upload do documento: %w", err)
 		}
 
-		// Determinar nome do arquivo
 		fileName := input.FileName
 		if fileName == "" {
-			// Tentar extrair do mime type
 			exts, _ := mime.ExtensionsByType(input.MediaType)
 			if len(exts) > 0 {
 				fileName = "document" + exts[0]
@@ -373,7 +377,6 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		return model.Message{}, fmt.Errorf("%w: %s", ErrUnsupportedMediaType, input.Type)
 	}
 
-	// Criar registro da mensagem
 	message := model.Message{
 		ID:         uuid.NewString(),
 		InstanceID: input.InstanceID,
@@ -383,29 +386,59 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		Status:     "sending",
 	}
 
-	// Salvar mensagem no banco ANTES de enviar (para ter histórico)
+	
 	msg, err := s.repo.Create(ctx, message)
 	if err != nil {
 		return model.Message{}, fmt.Errorf("erro ao salvar mensagem: %w", err)
 	}
 
-	// Enviar mensagem (síncrono - aguarda resposta do servidor)
-	_, err = client.SendMessage(ctx, toJID, waMessage)
-	if err != nil {
-		// Atualizar status para failed
-		msg.Status = "failed"
-		// Tentar atualizar no banco (não crítico se falhar)
-		_ = s.repo.Update(ctx, msg)
-		return msg, fmt.Errorf("erro ao enviar mensagem: %w", err)
+	
+	var resp whatsmeow.SendResponse
+	maxRetries := 3
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(math.Pow(2, float64(attempt))) * time.Second
+			s.log.Info("tentando reenvio de mensagem",
+				zap.Int("attempt", attempt),
+				zap.Duration("backoff", backoff),
+				zap.String("to", toJID.String()))
+			time.Sleep(backoff)
+
+			
+			_ = client.SendPresence(ctx, types.PresenceAvailable)
+			_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, types.ChatPresenceMediaText)
+
+			
+			_, _ = client.GetUserDevices(ctx, []types.JID{toJID})
+		}
+
+		resp, err = client.SendMessage(ctx, toJID, waMessage)
+		if err == nil {
+			break
+		}
+
+		s.log.Warn("falha no envio da mensagem",
+			zap.Int("attempt", attempt),
+			zap.Error(err),
+			zap.String("to", toJID.String()))
+
+		
+		if strings.Contains(err.Error(), "not logged in") {
+			break
+		}
 	}
 
-	// Sucesso - atualizar status
-	msg.Status = "sent"
-	// Opcional: salvar server_id e timestamp se quiser
-	// resp.ID e resp.Timestamp estão disponíveis se necessário
+	if err != nil {
+		msg.Status = "failed"
+		_ = s.repo.Update(ctx, msg)
+		return msg, fmt.Errorf("erro ao enviar mensagem após %d tentativas: %w", maxRetries, err)
+	}
 
+	
+	msg.Status = "sent"
+	msg.WhatsAppID = resp.ID
 	if err := s.repo.Update(ctx, msg); err != nil {
-		// Log mas não retorna erro (mensagem já foi enviada)
+		s.log.Warn("erro ao atualizar status enviado no banco", zap.Error(err))
 	}
 
 	return msg, nil
@@ -415,7 +448,6 @@ func (s *Service) List(ctx context.Context, instanceID string) ([]model.Message,
 	return s.repo.ListByInstance(ctx, instanceID)
 }
 
-// resolveJID tenta resolver o JID correto checando IsOnWhatsApp para números do Brasil
 func (s *Service) resolveJID(ctx context.Context, client *whatsmeow.Client, phone string) (types.JID, error) {
 	phone = strings.TrimSpace(phone)
 
