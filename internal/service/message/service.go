@@ -410,6 +410,11 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 
 		resp, err = client.SendMessage(ctx, toJID, waMessage)
 		if err == nil {
+			s.log.Info("mensagem enviada com sucesso",
+				zap.Int("attempt", attempt),
+				zap.String("to", toJID.String()),
+				zap.String("server_id", resp.ID),
+				zap.Int64("timestamp", resp.Timestamp.Unix()))
 			break
 		}
 

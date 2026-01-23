@@ -152,8 +152,10 @@ func (d *MessageStuckDetector) checkStuckMessages(ctx context.Context) {
 		}
 
 		for _, msg := range messages {
-			isStuck := (msg.Status == "sent" || msg.Status == "retry") && time.Since(msg.CreatedAt) > d.stuckTimeout
+			
+			isStuck := (msg.Status == "sent" || msg.Status == "retry" || msg.Status == "delivered") && time.Since(msg.CreatedAt) > d.stuckTimeout
 
+			
 			isRetry := msg.Status == "retry"
 
 			if isStuck || isRetry {
