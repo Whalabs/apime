@@ -150,6 +150,12 @@ func (m *Manager) IsSessionReady(instanceID string) bool {
 	return m.sessionReady[instanceID]
 }
 
+func (m *Manager) GetConnectedAt(instanceID string) time.Time {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.connectedAt[instanceID]
+}
+
 func (m *Manager) GetPreKeyCount(instanceID string) (int, error) {
 	m.mu.RLock()
 	client, exists := m.clients[instanceID]
@@ -1744,9 +1750,4 @@ func (m *Manager) getMessageForRetryCallback(instanceID string) func(types.JID, 
 
 		return nil
 	}
-}
-func (m *Manager) GetConnectedAt(instanceID string) time.Time {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.connectedAt[instanceID]
 }

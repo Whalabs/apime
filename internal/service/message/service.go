@@ -54,6 +54,7 @@ type SessionManager interface {
 	IsSessionReady(instanceID string) bool
 	HasSession(instanceID string, jid types.JID) (bool, error)
 	GetPreKeyCount(instanceID string) (int, error)
+	GetConnectedAt(instanceID string) time.Time
 }
 
 func NewService(repo storage.MessageRepository, q queue.Queue, log *zap.Logger) *Service {
@@ -113,8 +114,6 @@ func (s *Service) Enqueue(ctx context.Context, input EnqueueInput) (model.Messag
 		}
 		if err := s.queue.Enqueue(ctx, event); err != nil {
 			s.log.Error("erro ao enfileirar mensagem para o worker", zap.Error(err))
-			// Não retornamos erro aqui pois a mensagem já está salva no banco (status queued)
-			// e o detector de stuck ou polling eventual pode recuperá-la.
 		}
 	}
 
@@ -176,10 +175,20 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 	isReady := false
 	poked := false
 
+	connectedAt := s.sessionMgr.GetConnectedAt(input.InstanceID)
+	isColdStart := time.Since(connectedAt) < 60*time.Second
+	minPreKeys := 5
+	if isColdStart {
+		minPreKeys = 20
+		s.log.Debug("Sessão em Cold Start detectada, aguardando estabilização maior",
+			zap.String("instance_id", input.InstanceID),
+			zap.Duration("since_connection", time.Since(connectedAt)))
+	}
+
 	for time.Since(readyStart) < 30*time.Second {
 		preKeyCount, _ := s.sessionMgr.GetPreKeyCount(input.InstanceID)
 
-		if s.sessionMgr.IsSessionReady(input.InstanceID) && preKeyCount > 5 {
+		if s.sessionMgr.IsSessionReady(input.InstanceID) && preKeyCount >= minPreKeys {
 			isReady = true
 			break
 		}
@@ -195,6 +204,11 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 
 	if !isReady {
 		return model.Message{}, fmt.Errorf("sessão indisponível para criptografia (pode levar alguns instantes após conectar), tente novamente")
+	}
+
+	if isColdStart && time.Since(connectedAt) < 20*time.Second {
+		s.log.Debug("Aguardando delay de segurança pós-conexão (Cold Start)", zap.String("instance_id", input.InstanceID))
+		time.Sleep(3 * time.Second)
 	}
 
 	time.Sleep(1500 * time.Millisecond)
@@ -549,9 +563,7 @@ func (s *Service) resolveJID(ctx context.Context, client *whatsmeow.Client, phon
 		}, phone)
 	}
 
-	if strings.HasSuffix(phone, "@s.whatsapp.net") {
-		phone = strings.TrimSuffix(phone, "@s.whatsapp.net")
-	}
+	phone = strings.TrimSuffix(phone, "@s.whatsapp.net")
 
 	if val, ok := jidCache.Load(phone); ok {
 		entry := val.(jidCacheEntry)
