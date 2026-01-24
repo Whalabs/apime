@@ -453,10 +453,11 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 
 	var resp whatsmeow.SendResponse
 	maxRetries := 3
+
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			backoff := time.Duration(math.Pow(2, float64(attempt))) * time.Second
-			s.log.Info("tentando reenvio de mensagem",
+			s.log.Info("tentando reenvio de mensagem devido a erro anterior",
 				zap.Int("attempt", attempt),
 				zap.Duration("backoff", backoff),
 				zap.String("to", toJID.String()))
@@ -465,6 +466,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			_ = client.SendPresence(ctx, types.PresenceAvailable)
 			_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, types.ChatPresenceMediaText)
 
+			// Recalcular dispositivos no retry caso tenha sido um erro de criptografia
 			_, _ = client.GetUserDevices(ctx, []types.JID{toJID})
 		}
 
@@ -487,6 +489,14 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			s.log.Warn("erro de identidade não confiável detectado, limpando identidade e tentando novamente",
 				zap.String("to", toJID.String()))
 			client.Store.Identities.DeleteIdentity(ctx, toJID.SignalAddress().String())
+			continue
+		}
+
+		// Tratar Cold Start de Criptografia: no signal session
+		if strings.Contains(err.Error(), "no signal session") {
+			s.log.Warn("sessão de criptografia não estabelecida (cold start), tentando warmup e reenvio",
+				zap.String("to", toJID.String()))
+			_, _ = client.GetUserDevices(ctx, []types.JID{toJID})
 			continue
 		}
 
