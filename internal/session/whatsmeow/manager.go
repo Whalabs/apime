@@ -1520,6 +1520,7 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 		m.log.Debug("app state sync completo",
 			zap.String("instance_id", instanceID),
 			zap.String("name", string(v.Name)),
+			zap.Uint64("version", v.Version),
 		)
 
 		if v.Name == "critical_block" || v.Name == "critical_unblock_low" {
@@ -1533,6 +1534,12 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 			m.log.Info("sessão pronta para enviar mensagens (app state sync completo)",
 				zap.String("instance_id", instanceID))
 		}
+	case *events.AppStateSyncError:
+		m.log.Error("erro no app state sync",
+			zap.String("instance_id", instanceID),
+			zap.String("name", string(v.Name)),
+			zap.Error(v.Error),
+		)
 	case *events.StreamReplaced:
 		m.log.Warn("stream substituído pelo servidor - limpando cache de dispositivos",
 			zap.String("instance_id", instanceID))
