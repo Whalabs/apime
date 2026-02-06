@@ -388,7 +388,43 @@ func (m *Manager) createSession(ctx context.Context, instanceID string, forceRec
 }
 
 func (m *Manager) monitorQRChannel(instanceID string, client *whatsmeow.Client, qrChan <-chan whatsmeow.QRChannelItem, cancel context.CancelFunc) {
-	defer cancel()
+	pairingSucceeded := false
+
+	defer func() {
+		cancel()
+		// Limpar estado do QR quando o canal fecha (expiração ou sucesso)
+		m.mu.Lock()
+		delete(m.qrContexts, instanceID)
+		delete(m.currentQRs, instanceID)
+		m.mu.Unlock()
+
+		// Se o pareamento não teve sucesso, limpar cliente e device store parcial
+		if !pairingSucceeded {
+			m.log.Warn("canal QR encerrado sem pareamento, limpando estado",
+				zap.String("instance_id", instanceID))
+
+			if client != nil && !client.IsLoggedIn() {
+				client.Disconnect()
+				m.mu.Lock()
+				delete(m.clients, instanceID)
+				m.mu.Unlock()
+
+				// Limpar device store parcial (SQLite)
+				if m.storageDriver != "postgres" {
+					dbPath := filepath.Join(m.baseDir, instanceID+".db")
+					if _, err := os.Stat(dbPath); err == nil {
+						m.log.Info("removendo arquivo SQLite de sessão parcial",
+							zap.String("instance_id", instanceID),
+							zap.String("db_path", dbPath))
+						_ = os.Remove(dbPath)
+					}
+				}
+			}
+		} else {
+			m.log.Info("canal QR encerrado após pareamento bem-sucedido",
+				zap.String("instance_id", instanceID))
+		}
+	}()
 
 	for evt := range qrChan {
 		switch evt.Event {
@@ -402,8 +438,16 @@ func (m *Manager) monitorQRChannel(instanceID string, client *whatsmeow.Client, 
 				m.log.Warn("QR code recebido mas vazio", zap.String("instance_id", instanceID))
 			}
 
+		case "timeout":
+			m.log.Warn("QR code expirou (timeout do WhatsApp)",
+				zap.String("instance_id", instanceID))
+			m.mu.Lock()
+			delete(m.currentQRs, instanceID)
+			m.mu.Unlock()
+
 		case "success":
 			m.log.Info("pareamento concluído com sucesso", zap.String("instance_id", instanceID))
+			pairingSucceeded = true
 
 			m.mu.Lock()
 			m.pairingSuccess[instanceID] = time.Now()
@@ -500,9 +544,17 @@ func (m *Manager) GetQR(ctx context.Context, instanceID string) (string, error) 
 			case <-time.After(5 * time.Second):
 				m.mu.RLock()
 				currentQR, hasQR = m.currentQRs[instanceID]
+				_, stillHasQRContext := m.qrContexts[instanceID]
 				m.mu.RUnlock()
 				if hasQR && currentQR != "" {
 					return currentQR, nil
+				}
+				if !stillHasQRContext {
+					// Contexto QR foi limpo durante a espera (canal expirou)
+					// Forçar recriação da sessão
+					m.log.Info("contexto QR expirou durante espera, recriando sessão",
+						zap.String("instance_id", instanceID))
+					return m.CreateSession(ctx, instanceID)
 				}
 				return "", fmt.Errorf("QR code ainda não disponível, aguarde alguns segundos")
 			case <-ctx.Done():
@@ -547,16 +599,21 @@ func (m *Manager) GetQR(ctx context.Context, instanceID string) (string, error) 
 		return m.CreateSession(ctx, instanceID)
 	}
 
-	dbPath := filepath.Join(m.baseDir, instanceID+".db")
-	if _, err := os.Stat(dbPath); err == nil {
-		client, err := m.restoreSessionIfExists(ctx, instanceID)
-		if err == nil && client != nil && client.IsLoggedIn() {
-			return "", fmt.Errorf("instância já conectada, não é necessário QR code")
+	// Verificar se já existe sessão ativa antes de criar nova
+	client, err := m.restoreSessionIfExists(ctx, instanceID)
+	if err == nil && client != nil && client.IsLoggedIn() {
+		return "", fmt.Errorf("instância já conectada, não é necessário QR code")
+	}
+
+	// Limpar sessão inválida/expirada
+	if m.storageDriver != "postgres" {
+		dbPath := filepath.Join(m.baseDir, instanceID+".db")
+		if _, err := os.Stat(dbPath); err == nil {
+			m.log.Info("sessão SQLite inválida ou expirada, deletando e criando nova",
+				zap.String("instance_id", instanceID),
+			)
+			_ = os.Remove(dbPath)
 		}
-		m.log.Info("sessão SQLite inválida ou expirada, deletando e criando nova",
-			zap.String("instance_id", instanceID),
-		)
-		_ = os.Remove(dbPath)
 	}
 
 	return m.CreateSession(ctx, instanceID)
@@ -648,6 +705,25 @@ func (m *Manager) DeleteSession(instanceID string) error {
 
 	if client != nil {
 		m.logoutClient(instanceID, client)
+	}
+
+	// Limpar WhatsAppJID e status no banco para evitar restauração de sessão antiga
+	if m.instanceRepo != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		inst, err := m.instanceRepo.GetByID(ctx, instanceID)
+		if err == nil {
+			inst.WhatsAppJID = ""
+			inst.Status = model.InstanceStatusDisconnected
+			if _, err := m.instanceRepo.Update(ctx, inst); err != nil {
+				m.log.Warn("erro ao limpar JID da instância no DeleteSession",
+					zap.String("instance_id", instanceID),
+					zap.Error(err))
+			} else {
+				m.log.Info("JID e status limpos com sucesso no DeleteSession",
+					zap.String("instance_id", instanceID))
+			}
+		}
 	}
 
 	if m.storageDriver == "postgres" && m.pgConnString != "" {
