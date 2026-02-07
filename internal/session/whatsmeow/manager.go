@@ -1400,8 +1400,11 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 				zap.Strings("msg_ids", receipt.MessageIDs),
 				zap.String("chat", receipt.Chat.String()))
 
-			// Resetar sessão imediatamente para o contato
+			// Resetar sessão e IDENTIDADE imediatamente para o contato
 			go func() {
+				m.log.Info("Acionando reset completo (sessão + identidade) devido a retry receipt",
+					zap.String("instance_id", instanceID),
+					zap.String("chat", receipt.Chat.String()))
 				_ = m.ResetContactSession(context.Background(), instanceID, receipt.Chat.String())
 			}()
 		}
@@ -1748,17 +1751,28 @@ func (m *Manager) ResetContactSession(ctx context.Context, instanceID, jidStr st
 		return err
 	}
 
-	err = client.Store.Sessions.DeleteSession(ctx, jid.User+"@"+jid.Server)
+	// 1. Deletar a sessão (chaves efêmeras)
+	err = client.Store.Sessions.DeleteSession(ctx, jid.SignalAddress().String())
 	if err != nil {
-		m.log.Error("erro ao resetar sessão do contato",
+		m.log.Warn("aviso: falha ao deletar sessão do contato (pode não existir)",
 			zap.String("instance_id", instanceID),
 			zap.String("target_jid", jidStr),
 			zap.Error(err),
 		)
-		return err
 	}
 
-	m.log.Info("sessão de criptografia resetada para o contato",
+	// 2. Deletar a identidade (chaves de longo prazo/confiança)
+	// Essencial para casos onde o contato mudou de Normal para Business ou trocou de aparelho
+	err = client.Store.Identities.DeleteIdentity(ctx, jid.SignalAddress().String())
+	if err != nil {
+		m.log.Warn("aviso: falha ao deletar identidade do contato",
+			zap.String("instance_id", instanceID),
+			zap.String("target_jid", jidStr),
+			zap.Error(err),
+		)
+	}
+
+	m.log.Info("RESET COMPLETO de criptografia realizado para o contato (sessão + identidade)",
 		zap.String("instance_id", instanceID),
 		zap.String("target_jid", jidStr),
 	)
@@ -1818,9 +1832,10 @@ func (m *Manager) getMessageForRetryCallback(instanceID string) func(types.JID, 
 
 		msg, err := m.messageRepo.GetByWhatsAppID(ctx, id)
 		if err != nil {
-			m.log.Debug("mensagem não encontrada para retry no banco",
+			m.log.Warn("MENSAGEM NÃO ENCONTRADA no banco para retry solicitado pelo WhatsApp",
 				zap.String("instance_id", instanceID),
 				zap.String("msg_id", id),
+				zap.String("chat", chat.String()),
 				zap.Error(err))
 			return nil
 		}
