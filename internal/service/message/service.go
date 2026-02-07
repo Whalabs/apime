@@ -584,6 +584,10 @@ func (s *Service) resolveJID(ctx context.Context, client *whatsmeow.Client, phon
 	if val, ok := jidCache.Load(phone); ok {
 		entry := val.(jidCacheEntry)
 		if time.Now().Before(entry.expiresAt) {
+			if entry.jid.IsEmpty() {
+				s.log.Debug("JID negativo (não está no WhatsApp) resolvido via cache", zap.String("phone", phone))
+				return types.EmptyJID, fmt.Errorf("%w: número não registrado no WhatsApp (cache)", ErrInvalidJID)
+			}
 			s.log.Debug("JID resolvido via cache em memória", zap.String("phone", phone), zap.String("jid", entry.jid.String()))
 			return entry.jid, nil
 		}
@@ -602,8 +606,15 @@ func (s *Service) resolveJID(ctx context.Context, client *whatsmeow.Client, phon
 	}
 
 	if !strings.HasPrefix(phone, "55") {
+		// Se não for BR, apenas tenta parsear sem validar (ou você pode validar se preferir)
 		return types.ParseJID(phone + "@s.whatsapp.net")
 	}
+
+	// Simulando comportamento humano com delay aleatório antes da consulta real
+	// Isso evita padrões robóticos de consulta rápida
+	delay := 1000 + rand.Intn(2000) // 1s a 3s
+	s.log.Debug("Aplicando delay de segurança antes de IsOnWhatsApp", zap.Int("ms", delay))
+	time.Sleep(time.Duration(delay) * time.Millisecond)
 
 	candidates := []string{phone}
 
@@ -632,7 +643,9 @@ func (s *Service) resolveJID(ctx context.Context, client *whatsmeow.Client, phon
 	}
 
 	if resolvedJID.IsEmpty() {
-		s.log.Warn("WhatsApp não encontrado", zap.String("original_phone", phone), zap.Any("candidates", candidates))
+		s.log.Warn("WhatsApp não encontrado - registrando em cache negativo por 24h", zap.String("original_phone", phone), zap.Any("candidates", candidates))
+		// Cache Negativo: Evita reconsultar números que sabemos que não existem
+		jidCache.Store(phone, jidCacheEntry{jid: types.EmptyJID, expiresAt: time.Now().Add(24 * time.Hour)})
 		return types.EmptyJID, fmt.Errorf("%w: número não registrado no WhatsApp", ErrInvalidJID)
 	}
 
