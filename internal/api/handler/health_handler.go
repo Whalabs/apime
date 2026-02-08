@@ -16,7 +16,11 @@ func NewHealthHandler() *HealthHandler {
 
 func (h *HealthHandler) Register(r *gin.RouterGroup) {
 	// Root endpoint with version info
-	r.GET("/", func(c *gin.Context) {
+	r.Match([]string{"GET", "HEAD"}, "/", func(c *gin.Context) {
+		if c.Request.Method == http.MethodHead {
+			c.Status(http.StatusOK)
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "ok",
 			"version": config.Version,
@@ -25,7 +29,11 @@ func (h *HealthHandler) Register(r *gin.RouterGroup) {
 	})
 
 	// Health check endpoint
-	r.GET("/healthz", func(c *gin.Context) {
+	r.Match([]string{"GET", "HEAD"}, "/healthz", func(c *gin.Context) {
+		if c.Request.Method == http.MethodHead {
+			c.Status(http.StatusOK)
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "ok",
 			"version": config.Version,
