@@ -14,8 +14,8 @@ type InstanceRepository interface {
 	Create(ctx context.Context, instance model.Instance) (model.Instance, error)
 	GetByID(ctx context.Context, id string) (model.Instance, error)
 	GetByTokenHash(ctx context.Context, tokenHash string) (model.Instance, error)
-	List(ctx context.Context) ([]model.Instance, error)
-	ListByOwner(ctx context.Context, ownerUserID string) ([]model.Instance, error)
+	List(ctx context.Context, query string, limit, offset int) ([]model.Instance, int, error)
+	ListByOwner(ctx context.Context, ownerUserID string, query string, limit, offset int) ([]model.Instance, int, error)
 	Update(ctx context.Context, instance model.Instance) (model.Instance, error)
 	Delete(ctx context.Context, id string) error
 }
@@ -34,7 +34,7 @@ type UserRepository interface {
 	Create(ctx context.Context, user model.User) (model.User, error)
 	GetByID(ctx context.Context, id string) (model.User, error)
 	GetByEmail(ctx context.Context, email string) (model.User, error)
-	List(ctx context.Context) ([]model.User, error)
+	List(ctx context.Context, query string, limit, offset int) ([]model.User, int, error)
 	UpdatePassword(ctx context.Context, id, passwordHash string) error
 	Delete(ctx context.Context, id string) error
 }

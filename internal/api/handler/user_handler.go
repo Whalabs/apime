@@ -34,11 +34,12 @@ func (h *UserHandler) Register(r *gin.RouterGroup) {
 }
 
 func (h *UserHandler) list(c *gin.Context) {
-	users, err := h.service.List(c.Request.Context())
+	users, _, err := h.service.List(c.Request.Context(), "", 0, 0)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err)
 		return
 	}
+
 	response.Success(c, http.StatusOK, users)
 }
 

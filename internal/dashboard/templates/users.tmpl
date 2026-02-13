@@ -633,6 +633,82 @@
     background: rgba(239, 68, 68, 0.1);
     color: #ef4444;
   }
+
+  .pagination-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .pagination-btn {
+    padding: 0.5rem 0.85rem;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: all 0.2s;
+    font-weight: 500;
+  }
+
+  .pagination-btn:hover:not(.disabled) {
+    background: rgba(37, 99, 235, 0.1);
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .pagination-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+  }
+
+  .pagination-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .search-container {
+    position: relative;
+    flex: 1;
+    min-width: 250px;
+  }
+
+  .search-input {
+    width: 100%;
+    height: 44px;
+    padding: 0.6rem 1rem 0.6rem 2.75rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface) !important;
+    color: var(--text);
+    font-size: 0.95rem;
+    transition: all 0.2s;
+    box-sizing: border-box;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--focus);
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 0.9rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    color: var(--muted);
+    pointer-events: none;
+    stroke-width: 2;
+  }
 </style>
 
 <div class="users-container">
@@ -669,6 +745,15 @@
       </svg>
       Usuários
     </h1>
+    <div class="search-container">
+      <form action="/dashboard/users" method="GET" id="searchFormUsers">
+        <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" name="q" class="search-input" placeholder="Buscar por e-mail..." value="{{if index .Data "Query"}}{{index .Data "Query"}}{{end}}" autocomplete="off" autofocus>
+      </form>
+    </div>
     <button type="button" class="btn-add-user" id="btnOpenCreateUser">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 5l0 14" />
@@ -745,6 +830,26 @@
         {{end}}
       </tbody>
     </table>
+    
+    {{if gt (index .Data "TotalPages") 1}}
+    <div class="pagination-container">
+      {{$query := index .Data "Query"}}
+      {{$curr := index .Data "CurrentPage"}}
+      {{$total := index .Data "TotalPages"}}
+      
+      <a href="/dashboard/users?page={{sub $curr 1}}&q={{$query}}" class="pagination-btn {{if le $curr 1}}disabled{{end}}">
+        &laquo; Anterior
+      </a>
+      
+      {{range $p := (seq 1 $total)}}
+      <a href="/dashboard/users?page={{$p}}&q={{$query}}" class="pagination-btn {{if eq $p $curr}}active{{end}}">{{$p}}</a>
+      {{end}}
+      
+      <a href="/dashboard/users?page={{add $curr 1}}&q={{$query}}" class="pagination-btn {{if ge $curr $total}}disabled{{end}}">
+        Próximo &raquo;
+      </a>
+    </div>
+    {{end}}
   </div>
 </div>
 
@@ -920,6 +1025,54 @@ window.copyToClipboard = async function(text, btn) {
 };
 
 document.addEventListener('DOMContentLoaded', function() {
+  // Search form functionality
+  const searchForm = document.getElementById('searchFormUsers');
+  const searchInput = searchForm ? searchForm.querySelector('input[name="q"]') : null;
+  let searchTimeout = null;
+
+  if (searchInput) {
+    // Auto-submit ao digitar (com debounce)
+    searchInput.addEventListener('input', function() {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        searchForm.submit();
+      }, 500);
+    });
+
+    // Submit ao pressionar Enter
+    searchInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(searchTimeout);
+        searchForm.submit();
+      }
+    });
+
+    // Limpar busca ao pressionar ESC
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        clearTimeout(searchTimeout);
+
+        if (this.value !== '') {
+          // Limpa o campo
+          this.value = '';
+
+          // Redireciona para a página sem query
+          window.location.href = '/dashboard/users';
+
+          // Após o redirecionamento, o autofocus vai funcionar automaticamente
+        }
+      }
+    });
+
+    // Restaurar foco após carregamento (caso tenha vindo de uma busca)
+    searchInput.focus();
+    // Move o cursor para o final do texto
+    const len = searchInput.value.length;
+    searchInput.setSelectionRange(len, len);
+  }
+
   function openModal(modal) {
     if (modal) modal.classList.add('active');
   }

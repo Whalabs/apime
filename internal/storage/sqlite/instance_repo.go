@@ -108,18 +108,36 @@ func (r *instanceRepo) GetByID(ctx context.Context, id string) (model.Instance, 
 	return inst, nil
 }
 
-func (r *instanceRepo) List(ctx context.Context) ([]model.Instance, error) {
+func (r *instanceRepo) List(ctx context.Context, searchQuery string, limit, offset int) ([]model.Instance, int, error) {
+	whereClause := ""
+	args := []any{}
+	if searchQuery != "" {
+		whereClause = " WHERE i.name LIKE ? OR i.whatsapp_jid LIKE ? OR u.email LIKE ? "
+		pattern := "%" + searchQuery + "%"
+		args = append(args, pattern, pattern, pattern)
+	}
+
+	var total int
+	countQuery := "SELECT COUNT(*) FROM instances i LEFT JOIN users u ON i.owner_user_id = u.id" + whereClause
+	if err := r.db.Conn.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
 	query := `
 		SELECT i.id, i.name, i.owner_user_id, COALESCE(u.email, ''), COALESCE(i.whatsapp_jid, ''), i.status, COALESCE(i.webhook_url, ''), COALESCE(i.webhook_secret, ''), COALESCE(i.instance_token_hash, ''), i.instance_token_updated_at,
 		       i.history_sync_status, COALESCE(i.history_sync_cycle_id, ''), i.history_sync_updated_at, i.created_at, i.updated_at
 		FROM instances i
 		LEFT JOIN users u ON i.owner_user_id = u.id
-		ORDER BY i.created_at DESC
-	`
+	` + whereClause + " ORDER BY i.created_at DESC"
 
-	rows, err := r.db.Conn.QueryContext(ctx, query)
+	if limit > 0 {
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, limit, offset)
+	}
+
+	rows, err := r.db.Conn.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -135,7 +153,7 @@ func (r *instanceRepo) List(ctx context.Context) ([]model.Instance, error) {
 			&inst.HistorySyncStatus, &inst.HistorySyncCycleID, &historySyncUpdatedAt,
 			&createdAt, &updatedAt,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		inst.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
@@ -146,22 +164,40 @@ func (r *instanceRepo) List(ctx context.Context) ([]model.Instance, error) {
 		instances = append(instances, inst)
 	}
 
-	return instances, rows.Err()
+	return instances, total, rows.Err()
 }
 
-func (r *instanceRepo) ListByOwner(ctx context.Context, ownerUserID string) ([]model.Instance, error) {
+func (r *instanceRepo) ListByOwner(ctx context.Context, ownerUserID string, searchQuery string, limit, offset int) ([]model.Instance, int, error) {
+	whereClause := " WHERE i.owner_user_id = ? "
+	args := []any{ownerUserID}
+
+	if searchQuery != "" {
+		whereClause += " AND (i.name LIKE ? OR i.whatsapp_jid LIKE ? OR u.email LIKE ?) "
+		pattern := "%" + searchQuery + "%"
+		args = append(args, pattern, pattern, pattern)
+	}
+
+	var total int
+	countQuery := "SELECT COUNT(*) FROM instances i LEFT JOIN users u ON i.owner_user_id = u.id" + whereClause
+	if err := r.db.Conn.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
 	query := `
 		SELECT i.id, i.name, i.owner_user_id, COALESCE(u.email, ''), COALESCE(i.whatsapp_jid, ''), i.status, COALESCE(i.webhook_url, ''), COALESCE(i.webhook_secret, ''), COALESCE(i.instance_token_hash, ''), i.instance_token_updated_at,
 		       i.history_sync_status, COALESCE(i.history_sync_cycle_id, ''), i.history_sync_updated_at, i.created_at, i.updated_at
 		FROM instances i
 		LEFT JOIN users u ON i.owner_user_id = u.id
-		WHERE i.owner_user_id = ?
-		ORDER BY i.created_at DESC
-	`
+	` + whereClause + " ORDER BY i.created_at DESC"
 
-	rows, err := r.db.Conn.QueryContext(ctx, query, ownerUserID)
+	if limit > 0 {
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, limit, offset)
+	}
+
+	rows, err := r.db.Conn.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -177,7 +213,7 @@ func (r *instanceRepo) ListByOwner(ctx context.Context, ownerUserID string) ([]m
 			&inst.HistorySyncStatus, &inst.HistorySyncCycleID, &historySyncUpdatedAt,
 			&createdAt, &updatedAt,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		inst.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
@@ -188,7 +224,7 @@ func (r *instanceRepo) ListByOwner(ctx context.Context, ownerUserID string) ([]m
 		instances = append(instances, inst)
 	}
 
-	return instances, rows.Err()
+	return instances, total, rows.Err()
 }
 
 func (r *instanceRepo) Update(ctx context.Context, inst model.Instance) (model.Instance, error) {

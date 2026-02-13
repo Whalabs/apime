@@ -119,7 +119,7 @@ func main() {
 	logr.Info("webhook pool iniciada", zap.Int("workers", cfg.Webhook.Workers))
 
 	logr.Info("restaurando sessões...")
-	instances, err := instanceService.List(context.Background())
+	instances, _, err := instanceService.List(context.Background(), "", 0, 0)
 	if err == nil {
 		var allInstanceIDs []string
 		for _, inst := range instances {
@@ -139,7 +139,7 @@ func main() {
 	}
 
 	logr.Debug("inicializando serviços")
-	messageService := message.NewServiceWithSession(repos.Message, sessionManager, repos.Instance, repos.Contact, repos.OutboxQueue, logr)
+	messageService := message.NewServiceWithSession(repos.Message, sessionManager, repos.Instance, repos.Contact, repos.OutboxQueue, cfg.WhatsApp, logr)
 	outboxWorker := message.NewOutboxWorker(messageService, repos.OutboxQueue, logr, cfg.App.OutboxWorkers)
 	outboxWorker.Start(context.Background())
 	logr.Info("outbox worker iniciado", zap.Int("workers", cfg.App.OutboxWorkers))
@@ -151,7 +151,7 @@ func main() {
 
 	instanceHandler := handler.NewInstanceHandlerWithSession(instanceService, logr, sessionManager)
 	messageHandler := handler.NewMessageHandler(messageService)
-	whatsAppHandler := handler.NewWhatsAppHandler(sessionManager)
+	whatsAppHandler := handler.NewWhatsAppHandler(sessionManager, messageService)
 	authHandler := handler.NewAuthHandler(authService)
 	apiTokenHandler := handler.NewAPITokenHandler(apiTokenService)
 	userHandler := handler.NewUserHandler(userService)

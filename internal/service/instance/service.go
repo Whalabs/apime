@@ -93,15 +93,15 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (model.Instance
 	return created, nil
 }
 
-func (s *Service) List(ctx context.Context) ([]model.Instance, error) {
-	return s.repo.List(ctx)
+func (s *Service) List(ctx context.Context, searchQuery string, limit, offset int) ([]model.Instance, int, error) {
+	return s.repo.List(ctx, searchQuery, limit, offset)
 }
 
-func (s *Service) ListByUser(ctx context.Context, userID string, userRole string) ([]model.Instance, error) {
+func (s *Service) ListByUser(ctx context.Context, userID string, userRole string, searchQuery string, limit, offset int) ([]model.Instance, int, error) {
 	if userRole == "admin" {
-		return s.repo.List(ctx)
+		return s.repo.List(ctx, searchQuery, limit, offset)
 	}
-	return s.repo.ListByOwner(ctx, userID)
+	return s.repo.ListByOwner(ctx, userID, searchQuery, limit, offset)
 }
 
 func (s *Service) Get(ctx context.Context, id string) (model.Instance, error) {
@@ -297,4 +297,3 @@ func (s *Service) rotateToken(ctx context.Context, inst model.Instance) (string,
 	}
 	return plain, nil
 }
-

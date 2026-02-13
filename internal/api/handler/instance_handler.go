@@ -99,11 +99,13 @@ func (h *InstanceHandler) list(c *gin.Context) {
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
-	instances, err := h.service.ListByUser(c.Request.Context(), userID, userRole)
+
+	instances, _, err := h.service.ListByUser(c.Request.Context(), userID, userRole, "", 0, 0)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err)
 		return
 	}
+
 	response.Success(c, http.StatusOK, instances)
 }
 

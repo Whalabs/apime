@@ -83,16 +83,34 @@ func (r *userRepo) GetByEmail(ctx context.Context, email string) (model.User, er
 	return user, nil
 }
 
-func (r *userRepo) List(ctx context.Context) ([]model.User, error) {
+func (r *userRepo) List(ctx context.Context, searchQuery string, limit, offset int) ([]model.User, int, error) {
+	whereClause := ""
+	args := []any{}
+	if searchQuery != "" {
+		whereClause = " WHERE email LIKE ? "
+		pattern := "%" + searchQuery + "%"
+		args = append(args, pattern)
+	}
+
+	var total int
+	countQuery := "SELECT COUNT(*) FROM users" + whereClause
+	if err := r.db.Conn.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
 	query := `
 		SELECT id, email, password_hash, role, created_at
 		FROM users
-		ORDER BY created_at DESC
-	`
+	` + whereClause + " ORDER BY created_at DESC"
 
-	rows, err := r.db.Conn.QueryContext(ctx, query)
+	if limit > 0 {
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, limit, offset)
+	}
+
+	rows, err := r.db.Conn.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -104,14 +122,14 @@ func (r *userRepo) List(ctx context.Context) ([]model.User, error) {
 		if err := rows.Scan(
 			&user.ID, &user.Email, &user.PasswordHash, &user.Role, &createdAt,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		user.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		users = append(users, user)
 	}
 
-	return users, rows.Err()
+	return users, total, rows.Err()
 }
 
 func (r *userRepo) UpdatePassword(ctx context.Context, id, passwordHash string) error {

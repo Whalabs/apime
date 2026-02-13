@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,18 +14,23 @@ import (
 	"go.mau.fi/whatsmeow/types"
 
 	"github.com/open-apime/apime/internal/pkg/response"
+	messageSvc "github.com/open-apime/apime/internal/service/message"
 )
 
 type WhatsAppHandler struct {
 	sessionManager WhatsAppSessionManager
+	messageService *messageSvc.Service
 }
 
 type WhatsAppSessionManager interface {
 	GetClient(instanceID string) (*whatsmeow.Client, error)
 }
 
-func NewWhatsAppHandler(sessionManager WhatsAppSessionManager) *WhatsAppHandler {
-	return &WhatsAppHandler{sessionManager: sessionManager}
+func NewWhatsAppHandler(sessionManager WhatsAppSessionManager, messageService *messageSvc.Service) *WhatsAppHandler {
+	return &WhatsAppHandler{
+		sessionManager: sessionManager,
+		messageService: messageService,
+	}
 }
 
 func (h *WhatsAppHandler) Register(r *gin.RouterGroup) {
@@ -110,14 +116,24 @@ func (h *WhatsAppHandler) checkIsWhatsApp(c *gin.Context) {
 		return
 	}
 
-	resp, err := client.IsOnWhatsApp(c.Request.Context(), []string{phone})
-	if err != nil {
+	jid, err := h.messageService.ResolveJID(c.Request.Context(), client, phone)
+
+	// Mapear resultado para o formato esperado pela API
+	result := types.IsOnWhatsAppResponse{
+		Query: phone,
+	}
+
+	if err == nil {
+		result.JID = jid
+		result.IsIn = true
+	} else if errors.Is(err, messageSvc.ErrInvalidJID) {
+		result.IsIn = false
+	} else {
 		response.Error(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	// Retornar resposta crua do whatsmeow (evita acoplamento com struct interno)
-	response.Success(c, http.StatusOK, gin.H{"results": resp})
+	response.Success(c, http.StatusOK, gin.H{"results": []types.IsOnWhatsAppResponse{result}})
 }
 
 type setPresenceRequest struct {

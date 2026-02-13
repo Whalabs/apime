@@ -25,7 +25,7 @@ type TokenManager interface {
 }
 
 type InstanceManager interface {
-	ListByUser(ctx context.Context, userID string, userRole string) ([]model.Instance, error)
+	ListByUser(ctx context.Context, userID string, userRole string, searchQuery string, limit, offset int) ([]model.Instance, int, error)
 	Delete(ctx context.Context, id string) error
 }
 
@@ -49,8 +49,8 @@ type CreateInput struct {
 	Role     string
 }
 
-func (s *Service) List(ctx context.Context) ([]model.User, error) {
-	return s.repo.List(ctx)
+func (s *Service) List(ctx context.Context, searchQuery string, limit, offset int) ([]model.User, int, error) {
+	return s.repo.List(ctx, searchQuery, limit, offset)
 }
 
 func (s *Service) Get(ctx context.Context, id string) (model.User, error) {
@@ -128,7 +128,7 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	}
 
 	if user.Role == "admin" {
-		users, err := s.repo.List(ctx)
+		users, _, err := s.repo.List(ctx, "", 0, 0)
 		if err != nil {
 			return err
 		}
@@ -144,7 +144,7 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	}
 
 	if s.instanceSvc != nil {
-		instances, err := s.instanceSvc.ListByUser(ctx, id, "user")
+		instances, _, err := s.instanceSvc.ListByUser(ctx, id, "user", "", 0, 0)
 		if err == nil {
 			for _, inst := range instances {
 				_ = s.instanceSvc.Delete(ctx, inst.ID)

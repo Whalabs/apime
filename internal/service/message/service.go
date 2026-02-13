@@ -19,6 +19,7 @@ import (
 
 	"sync"
 
+	"github.com/open-apime/apime/internal/config"
 	"github.com/open-apime/apime/internal/pkg/queue"
 	"github.com/open-apime/apime/internal/storage"
 	"github.com/open-apime/apime/internal/storage/model"
@@ -46,6 +47,7 @@ type Service struct {
 	instanceRepo storage.InstanceRepository
 	contactRepo  storage.ContactRepository
 	queue        queue.Queue
+	cfg          config.WhatsAppConfig
 	log          *zap.Logger
 }
 
@@ -57,21 +59,23 @@ type SessionManager interface {
 	GetConnectedAt(instanceID string) time.Time
 }
 
-func NewService(repo storage.MessageRepository, q queue.Queue, log *zap.Logger) *Service {
+func NewService(repo storage.MessageRepository, q queue.Queue, cfg config.WhatsAppConfig, log *zap.Logger) *Service {
 	return &Service{
 		repo:  repo,
 		queue: q,
+		cfg:   cfg,
 		log:   log,
 	}
 }
 
-func NewServiceWithSession(repo storage.MessageRepository, sessionMgr SessionManager, instanceRepo storage.InstanceRepository, contactRepo storage.ContactRepository, q queue.Queue, log *zap.Logger) *Service {
+func NewServiceWithSession(repo storage.MessageRepository, sessionMgr SessionManager, instanceRepo storage.InstanceRepository, contactRepo storage.ContactRepository, q queue.Queue, cfg config.WhatsAppConfig, log *zap.Logger) *Service {
 	return &Service{
 		repo:         repo,
 		sessionMgr:   sessionMgr,
 		instanceRepo: instanceRepo,
 		contactRepo:  contactRepo,
 		queue:        q,
+		cfg:          cfg,
 		log:          log,
 	}
 }
@@ -227,7 +231,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 
 	time.Sleep(1500 * time.Millisecond)
 
-	toJID, err := s.resolveJID(ctx, client, input.To)
+	toJID, err := s.ResolveJID(ctx, client, input.To)
 	if err != nil {
 		return model.Message{}, fmt.Errorf("%w: %s", ErrInvalidJID, input.To)
 	}
@@ -569,6 +573,15 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		jidCache.Delete(input.To)
 		s.log.Info("Removido do cache de JID devido a erro de envio", zap.String("phone", input.To))
 
+		if !strings.Contains(err.Error(), "not logged in") && !strings.Contains(err.Error(), "connection") {
+			if s.contactRepo != nil {
+				_ = s.contactRepo.Upsert(ctx, model.Contact{
+					Phone: input.To,
+					JID:   "",
+				})
+			}
+		}
+
 		msg.Status = "failed"
 		_ = s.repo.Update(ctx, msg)
 		return msg, fmt.Errorf("erro ao enviar mensagem após %d tentativas: %w", maxRetries, err)
@@ -589,7 +602,7 @@ func (s *Service) List(ctx context.Context, instanceID string) ([]model.Message,
 	return s.repo.ListByInstance(ctx, instanceID)
 }
 
-func (s *Service) resolveJID(ctx context.Context, client *whatsmeow.Client, phone string) (types.JID, error) {
+func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phone string) (types.JID, error) {
 	phone = strings.TrimSpace(phone)
 
 	if phone == "" {
@@ -626,11 +639,22 @@ func (s *Service) resolveJID(ctx context.Context, client *whatsmeow.Client, phon
 
 	if s.contactRepo != nil {
 		if contact, err := s.contactRepo.GetByPhone(ctx, phone); err == nil {
-			jid, jerr := types.ParseJID(contact.JID)
-			if jerr == nil {
-				s.log.Debug("JID resolvido via banco de dados", zap.String("phone", phone), zap.String("jid", jid.String()))
-				jidCache.Store(phone, jidCacheEntry{jid: jid, expiresAt: time.Now().Add(24 * time.Hour)})
-				return jid, nil
+			if contact.JID == "" {
+				// Cache Negativo no Banco: Se foi atualizado no período configurado e está vazio, é inválido
+				negativeTTL := time.Duration(s.cfg.JIDCacheNegativeTTLDays) * 24 * time.Hour
+				if time.Since(contact.UpdatedAt) < negativeTTL {
+					s.log.Debug("JID negativo (não está no WhatsApp) resolvido via banco de dados", zap.String("phone", phone))
+					jidCache.Store(phone, jidCacheEntry{jid: types.EmptyJID, expiresAt: contact.UpdatedAt.Add(negativeTTL)})
+					return types.EmptyJID, fmt.Errorf("%w: número não registrado no WhatsApp (DB cache)", ErrInvalidJID)
+				}
+			} else {
+				jid, jerr := types.ParseJID(contact.JID)
+				if jerr == nil {
+					s.log.Debug("JID resolvido via banco de dados", zap.String("phone", phone), zap.String("jid", jid.String()))
+					positiveTTL := time.Duration(s.cfg.JIDCachePositiveTTLHours) * time.Hour
+					jidCache.Store(phone, jidCacheEntry{jid: jid, expiresAt: time.Now().Add(positiveTTL)})
+					return jid, nil
+				}
 			}
 		}
 	}
@@ -673,13 +697,23 @@ func (s *Service) resolveJID(ctx context.Context, client *whatsmeow.Client, phon
 	}
 
 	if resolvedJID.IsEmpty() {
-		s.log.Warn("WhatsApp não encontrado - registrando em cache negativo por 24h", zap.String("original_phone", phone), zap.Any("candidates", candidates))
+		negativeTTL := time.Duration(s.cfg.JIDCacheNegativeTTLDays) * 24 * time.Hour
+		s.log.Warn("WhatsApp não encontrado - registrando em cache negativo", zap.String("original_phone", phone), zap.Any("candidates", candidates), zap.Duration("ttl", negativeTTL))
 		// Cache Negativo: Evita reconsultar números que sabemos que não existem
-		jidCache.Store(phone, jidCacheEntry{jid: types.EmptyJID, expiresAt: time.Now().Add(24 * time.Hour)})
+		jidCache.Store(phone, jidCacheEntry{jid: types.EmptyJID, expiresAt: time.Now().Add(negativeTTL)})
+
+		if s.contactRepo != nil {
+			_ = s.contactRepo.Upsert(ctx, model.Contact{
+				Phone: phone,
+				JID:   "",
+			})
+		}
+
 		return types.EmptyJID, fmt.Errorf("%w: número não registrado no WhatsApp", ErrInvalidJID)
 	}
 
-	jidCache.Store(phone, jidCacheEntry{jid: resolvedJID, expiresAt: time.Now().Add(24 * time.Hour)})
+	positiveTTL := time.Duration(s.cfg.JIDCachePositiveTTLHours) * time.Hour
+	jidCache.Store(phone, jidCacheEntry{jid: resolvedJID, expiresAt: time.Now().Add(positiveTTL)})
 	if s.contactRepo != nil {
 		_ = s.contactRepo.Upsert(ctx, model.Contact{
 			Phone: phone,
