@@ -853,6 +853,7 @@ type sendReactionRequest struct {
 	MessageID string `json:"message_id" binding:"required"`
 	Emoji     string `json:"emoji"`
 	Sender    string `json:"sender"`
+	FromMe    *bool  `json:"from_me"`
 }
 
 func (h *WhatsAppHandler) sendReaction(c *gin.Context) {
@@ -883,9 +884,14 @@ func (h *WhatsAppHandler) sendReaction(c *gin.Context) {
 		return
 	}
 
+	fromMe := false
+	if req.FromMe != nil {
+		fromMe = *req.FromMe
+	}
+
 	msgKey := &waCommon.MessageKey{
 		RemoteJID: proto.String(chatJID.String()),
-		FromMe:    proto.Bool(false),
+		FromMe:    proto.Bool(fromMe),
 		ID:        proto.String(req.MessageID),
 	}
 
