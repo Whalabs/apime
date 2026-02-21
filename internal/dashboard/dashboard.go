@@ -23,7 +23,6 @@ import (
 	"github.com/open-apime/apime/internal/config"
 	"github.com/open-apime/apime/internal/service/api_token"
 	"github.com/open-apime/apime/internal/service/auth"
-	device_config "github.com/open-apime/apime/internal/service/device_config"
 	"github.com/open-apime/apime/internal/service/instance"
 	"github.com/open-apime/apime/internal/service/user"
 	"github.com/open-apime/apime/internal/storage/model"
@@ -44,7 +43,6 @@ type Options struct {
 	InstanceService     *instance.Service
 	UserService         *user.Service
 	APITokenService     *api_token.Service
-	DeviceConfigService *device_config.Service
 	SessionManager      SessionManager
 	JWTSecret           string
 	DocsDirectory       string
@@ -59,7 +57,6 @@ type Handler struct {
 	instances      *instance.Service
 	users          *user.Service
 	tokens         *api_token.Service
-	deviceConfig   *device_config.Service
 	sessionManager SessionManager
 	logger         *zap.Logger
 	docsDir        string
@@ -140,7 +137,6 @@ func Register(router *gin.Engine, opts Options) error {
 		instances:      opts.InstanceService,
 		users:          opts.UserService,
 		tokens:         opts.APITokenService,
-		deviceConfig:   opts.DeviceConfigService,
 		sessionManager: opts.SessionManager,
 		logger:         opts.Logger,
 		docsDir:        opts.DocsDirectory,
@@ -185,9 +181,6 @@ func Register(router *gin.Engine, opts Options) error {
 	adminGroup.GET("/users/:id/tokens", h.listUserTokens)
 	adminGroup.POST("/users/:id/tokens", h.createUserToken)
 	adminGroup.POST("/users/:id/tokens/:tokenID/delete", h.deleteUserToken)
-
-	group.GET("/settings", h.settingsPage)
-	group.POST("/settings", h.updateSettings)
 
 	group.GET("/docs", h.docsPage)
 	group.GET("/docs/openapi", h.downloadOpenAPI)
@@ -425,7 +418,6 @@ func (h *Handler) rotateInstanceToken(c *gin.Context) {
 		redirectWithMessage(c, "/dashboard", "error", "Instância inválida.")
 		return
 	}
-	// Obter informações do usuário do contexto
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
@@ -577,7 +569,6 @@ func (h *Handler) instanceDiagnostics(c *gin.Context) {
 
 func (h *Handler) disconnectInstance(c *gin.Context) {
 	id := c.Param("id")
-	// Obter informações do usuário do contexto
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
@@ -591,7 +582,6 @@ func (h *Handler) disconnectInstance(c *gin.Context) {
 
 func (h *Handler) deleteInstance(c *gin.Context) {
 	id := c.Param("id")
-	// Obter informações do usuário do contexto
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
@@ -624,13 +614,6 @@ func (h *Handler) usersPage(c *gin.Context) {
 	}
 
 	adminCount := 0
-	// Aqui listamos todos os admins para o contador (simplificado, ou poderíamos ter um count separado no repo)
-	// Para manter performance em bases gigantes, o ideal seria repos.CountAdmins, mas para dashboard admin está ok.
-	// Vou usar a lista paginada apenas para exibição, mas o adminCount precisa ser do total.
-	// Por simplicidade agora, vou manter a lógica sobre os usuários retornados ou aceitar que o adminCount
-	// será uma aproximação baseada na página se não quisermos outra query.
-	// O melhor é fazer uma query de count no banco se for crítico.
-	// Para este projeto, o número de admins costuma ser pequeno.
 	for _, u := range users {
 		if u.Role == "admin" {
 			adminCount++
@@ -894,40 +877,3 @@ func (h *Handler) readOpenAPIPreview() (string, bool) {
 	return text, true
 }
 
-func (h *Handler) settingsPage(c *gin.Context) {
-	if h.deviceConfig == nil {
-		h.logger.Error("deviceConfig service não inicializado")
-		redirectWithMessage(c, "/dashboard", "error", "Serviço de configurações não disponível.")
-		return
-	}
-
-	config, err := h.deviceConfig.Get(c.Request.Context())
-	if err != nil {
-		h.logger.Warn("erro ao buscar configurações", zap.Error(err))
-		redirectWithMessage(c, "/dashboard", "error", "Erro ao carregar configurações.")
-		return
-	}
-
-	data := map[string]any{
-		"Config": config,
-	}
-	page := h.pageData(c, "", "settings_content", data)
-	c.HTML(http.StatusOK, "layout", page)
-}
-
-func (h *Handler) updateSettings(c *gin.Context) {
-	platformType := strings.TrimSpace(c.PostForm("platform_type"))
-	osName := strings.TrimSpace(c.PostForm("os_name"))
-
-	_, err := h.deviceConfig.Update(c.Request.Context(), device_config.UpdateInput{
-		PlatformType: platformType,
-		OSName:       osName,
-	})
-	if err != nil {
-		h.logger.Warn("erro ao atualizar configurações", zap.Error(err))
-		redirectWithMessage(c, "/dashboard/settings", "error", "Erro ao salvar configurações: "+err.Error())
-		return
-	}
-
-	redirectWithMessage(c, "/dashboard/settings", "success", "Configurações salvas com sucesso!")
-}

@@ -19,7 +19,6 @@ import (
 	"github.com/open-apime/apime/internal/server"
 	"github.com/open-apime/apime/internal/service/api_token"
 	"github.com/open-apime/apime/internal/service/auth"
-	device_config "github.com/open-apime/apime/internal/service/device_config"
 	"github.com/open-apime/apime/internal/service/instance"
 	"github.com/open-apime/apime/internal/service/message"
 	"github.com/open-apime/apime/internal/service/user"
@@ -74,7 +73,7 @@ func main() {
 		pgConnString = cfg.DB.DSN()
 	}
 
-	sessionManager := whatsmeow.NewManager(logr, cfg.WhatsApp.SessionKeyEnc, cfg.Storage.Driver, sessionDir, pgConnString, repos.DeviceConfig, repos.Instance, repos.HistorySync, repos.Message)
+	sessionManager := whatsmeow.NewManager(logr, cfg.WhatsApp.SessionKeyEnc, cfg.Storage.Driver, sessionDir, pgConnString, repos.Instance, repos.HistorySync, repos.Message, repos.EventLog)
 
 	instanceService := instance.NewServiceWithSessionMessagesAndEventLogs(repos.Instance, repos.Message, repos.EventLog, sessionManager)
 
@@ -130,7 +129,6 @@ func main() {
 				zap.Int("total", len(allInstanceIDs)),
 			)
 			sessionManager.RestoreAllSessions(context.Background(), allInstanceIDs)
-			time.Sleep(3 * time.Second)
 		} else {
 			logr.Info("nenhuma instância encontrada para restaurar")
 		}
@@ -146,7 +144,6 @@ func main() {
 	apiTokenService := api_token.NewService(repos.APIToken)
 	userService := user.NewService(repos.User, apiTokenService, instanceService)
 	authService := auth.NewService(cfg.JWT.Secret, cfg.JWT.ExpHours, repos.User)
-	deviceConfigService := device_config.NewService(repos.DeviceConfig)
 	logr.Debug("serviços inicializados")
 
 	instanceHandler := handler.NewInstanceHandlerWithSession(instanceService, logr, sessionManager)
@@ -190,7 +187,6 @@ func main() {
 			InstanceService:     instanceService,
 			UserService:         userService,
 			APITokenService:     apiTokenService,
-			DeviceConfigService: deviceConfigService,
 			SessionManager:      sessionManager,
 			JWTSecret:           cfg.JWT.Secret,
 			DocsDirectory:       ".",

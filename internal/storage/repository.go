@@ -54,11 +54,6 @@ type APITokenRepository interface {
 	Delete(ctx context.Context, id string) error
 }
 
-type DeviceConfigRepository interface {
-	Get(ctx context.Context) (model.DeviceConfig, error)
-	Update(ctx context.Context, config model.DeviceConfig) (model.DeviceConfig, error)
-}
-
 type HistorySyncRepository interface {
 	Create(ctx context.Context, payload model.WhatsappHistorySync) (model.WhatsappHistorySync, error)
 	ListPendingByInstance(ctx context.Context, instanceID string) ([]model.WhatsappHistorySync, error)

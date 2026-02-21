@@ -107,28 +107,52 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 
 	switch evt := evt.(type) {
 	case *events.Message:
+		if reaction := evt.Message.GetReactionMessage(); reaction != nil {
+			result["type"] = "reaction"
+
+			result["reactionEmoji"] = reaction.GetText()
+			if key := reaction.GetKey(); key != nil {
+				result["reactionMessageId"] = key.GetID()
+			}
+
+			senderJID := evt.Info.Sender.String()
+			if strings.Contains(senderJID, "@lid") && !evt.Info.SenderAlt.IsEmpty() {
+				senderJID = evt.Info.SenderAlt.String()
+			}
+			result["from"] = senderJID
+
+			chatJID := evt.Info.Chat.String()
+			if strings.Contains(chatJID, "@lid") {
+				if evt.Info.IsFromMe && !evt.Info.RecipientAlt.IsEmpty() && strings.Contains(evt.Info.RecipientAlt.String(), "@s.whatsapp.net") {
+					chatJID = evt.Info.RecipientAlt.String()
+				} else if !evt.Info.IsFromMe && !evt.Info.SenderAlt.IsEmpty() && strings.Contains(evt.Info.SenderAlt.String(), "@s.whatsapp.net") {
+					chatJID = evt.Info.SenderAlt.String()
+				}
+			}
+			result["chatJID"] = chatJID
+
+			result["isFromMe"] = evt.Info.IsFromMe
+			result["isGroup"] = evt.Info.IsGroup
+			result["timestamp"] = evt.Info.Timestamp
+			result["pushName"] = evt.Info.PushName
+			return result
+		}
+
 		result["type"] = "message"
 
-		// Determinar o JID correto do remetente
-		// Se o Sender for um LID (@lid), usar o SenderAlt que contém o número real
 		senderJID := evt.Info.Sender.String()
 		if strings.Contains(senderJID, "@lid") && !evt.Info.SenderAlt.IsEmpty() {
 			senderJID = evt.Info.SenderAlt.String()
 		}
 		result["from"] = senderJID
 
-		// Determinar o Chat JID correto (identificador ESTÁVEL da conversa)
-		// Se Chat for um LID, precisamos buscar o número real em outros campos
 		chatJID := evt.Info.Chat.String()
 		if strings.Contains(chatJID, "@lid") {
-			// Para mensagens ENVIADAS (isFromMe=true), o número real do DESTINATÁRIO está em RecipientAlt
-			// Para mensagens RECEBIDAS (isFromMe=false), o número real do REMETENTE está em SenderAlt
 			if evt.Info.IsFromMe && !evt.Info.RecipientAlt.IsEmpty() && strings.Contains(evt.Info.RecipientAlt.String(), "@s.whatsapp.net") {
 				chatJID = evt.Info.RecipientAlt.String()
 			} else if !evt.Info.IsFromMe && !evt.Info.SenderAlt.IsEmpty() && strings.Contains(evt.Info.SenderAlt.String(), "@s.whatsapp.net") {
 				chatJID = evt.Info.SenderAlt.String()
 			}
-			// Se ainda for LID, logar para debug
 			if strings.Contains(chatJID, "@lid") {
 				h.log.Warn("Chat ainda é LID após resolução",
 					zap.String("original_chat", evt.Info.Chat.String()),
@@ -146,17 +170,14 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		result["timestamp"] = evt.Info.Timestamp
 		result["pushName"] = evt.Info.PushName
 
-		// Texto da mensagem
 		if evt.Message.GetConversation() != "" {
 			result["text"] = evt.Message.GetConversation()
 		}
 
-		// Extended text message (citações, links, etc)
 		if extText := evt.Message.GetExtendedTextMessage(); extText != nil {
 			result["text"] = extText.GetText()
 		}
 
-		// Mídia (imagem, vídeo, documento, áudio) - agora com download
 		if img := evt.Message.GetImageMessage(); img != nil {
 			h.log.Info("detectada imagem, iniciando processamento", zap.String("msg_id", evt.Info.ID))
 			result["mediaType"] = "image"
@@ -166,7 +187,6 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			result["mimetype"] = img.GetMimetype()
 			result["fileSize"] = img.GetFileLength()
 
-			// Baixar mídia localmente
 			if client != nil && h.mediaStorage != nil {
 				if mediaURL := h.downloadAndSaveMedia(ctx, instanceID, evt.Info.ID, client, img, img.GetMimetype()); mediaURL != "" {
 					result["mediaUrl"] = mediaURL
@@ -184,7 +204,6 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			result["fileSize"] = vid.GetFileLength()
 			result["duration"] = vid.GetSeconds()
 
-			// Baixar mídia localmente
 			if client != nil && h.mediaStorage != nil {
 				if mediaURL := h.downloadAndSaveMedia(ctx, instanceID, evt.Info.ID, client, vid, vid.GetMimetype()); mediaURL != "" {
 					result["mediaUrl"] = mediaURL
@@ -200,7 +219,6 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			result["mimetype"] = doc.GetMimetype()
 			result["fileSize"] = doc.GetFileLength()
 
-			// Baixar mídia localmente
 			if client != nil && h.mediaStorage != nil {
 				if mediaURL := h.downloadAndSaveMedia(ctx, instanceID, evt.Info.ID, client, doc, doc.GetMimetype()); mediaURL != "" {
 					result["mediaUrl"] = mediaURL
@@ -213,7 +231,6 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			result["duration"] = aud.GetSeconds()
 			result["ptt"] = aud.GetPTT() // Push-to-Talk
 
-			// Baixar mídia localmente
 			if client != nil && h.mediaStorage != nil {
 				if mediaURL := h.downloadAndSaveMedia(ctx, instanceID, evt.Info.ID, client, aud, aud.GetMimetype()); mediaURL != "" {
 					result["mediaUrl"] = mediaURL
@@ -232,7 +249,6 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			result["contactNumber"] = con.GetVcard()
 		} else if stk := evt.Message.GetStickerMessage(); stk != nil {
 			result["mediaType"] = "sticker"
-			// Baixar mídia localmente
 			if client != nil && h.mediaStorage != nil {
 				if mediaURL := h.downloadAndSaveMedia(ctx, instanceID, evt.Info.ID, client, stk, stk.GetMimetype()); mediaURL != "" {
 					result["mediaUrl"] = mediaURL
@@ -240,7 +256,6 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			}
 		}
 
-		// Extrair MentionedJids do ContextInfo (qualquer tipo de mensagem)
 		var mentionedJids []string
 		if extText := evt.Message.GetExtendedTextMessage(); extText != nil && extText.GetContextInfo() != nil {
 			mentionedJids = extText.GetContextInfo().GetMentionedJID()
@@ -288,7 +303,6 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		result["eventType"] = fmt.Sprintf("%T", evt)
 	}
 
-	// Adicionar dados brutos do evento (serializado)
 	if data, err := json.Marshal(evt); err == nil {
 		result["raw"] = json.RawMessage(data)
 	}
@@ -296,8 +310,6 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 	return result
 }
 
-// downloadAndSaveMedia baixa mídia usando o cliente WhatsMeow e salva localmente.
-// Retorna a URL para acessar a mídia via API.
 func (h *EventHandler) downloadAndSaveMedia(ctx context.Context, instanceID string, messageID string, client *whatsmeow.Client, downloadable whatsmeow.DownloadableMessage, mimetype string) string {
 	h.log.Info("baixando mídia",
 		zap.String("instance_id", instanceID),
@@ -305,7 +317,6 @@ func (h *EventHandler) downloadAndSaveMedia(ctx context.Context, instanceID stri
 		zap.String("mimetype", mimetype),
 	)
 
-	// Baixar mídia do WhatsApp
 	data, err := client.Download(ctx, downloadable)
 	if err != nil {
 		h.log.Error("erro ao baixar mídia",
@@ -322,7 +333,6 @@ func (h *EventHandler) downloadAndSaveMedia(ctx context.Context, instanceID stri
 		zap.Int("size", len(data)),
 	)
 
-	// Salvar no storage
 	mediaID, err := h.mediaStorage.Save(ctx, instanceID, messageID, data, mimetype)
 	if err != nil {
 		h.log.Error("erro ao salvar mídia",
@@ -333,7 +343,6 @@ func (h *EventHandler) downloadAndSaveMedia(ctx context.Context, instanceID stri
 		return ""
 	}
 
-	// Construir URL para acesso via API
 	mediaURL := fmt.Sprintf("%s/api/media/%s/%s", h.apiBaseURL, instanceID, mediaID)
 
 	h.log.Info("mídia salva e URL gerada",
@@ -345,7 +354,6 @@ func (h *EventHandler) downloadAndSaveMedia(ctx context.Context, instanceID stri
 	return mediaURL
 }
 
-// generateEventID gera um ID único para o evento.
 func (h *EventHandler) generateEventID() string {
 	return uuid.New().String()
 }

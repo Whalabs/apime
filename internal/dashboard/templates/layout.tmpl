@@ -466,7 +466,6 @@
           </button>
           <div class="menu-dropdown" id="navMenuDropdown" role="menu" aria-label="Menu principal">
             {{if eq .UserRole "admin"}}<a href="/dashboard/users" role="menuitem" class="{{if eq .Path "/dashboard/users"}}active{{end}}">Usuários</a>{{end}}
-            <a href="/dashboard/settings" role="menuitem" class="{{if eq .Path "/dashboard/settings"}}active{{end}}">Configurações</a>
             <a href="/dashboard/docs" role="menuitem" class="{{if eq .Path "/dashboard/docs"}}active{{end}}">Docs</a>
             <div class="menu-divider" role="separator"></div>
             <a href="/dashboard/logout" role="menuitem">Sair</a>
@@ -483,7 +482,6 @@
     {{if eq .ContentTemplate "instances_content"}}{{template "instances_content" .}}{{end}}
     {{if eq .ContentTemplate "instance_qr_content"}}{{template "instance_qr_content" .}}{{end}}
     {{if eq .ContentTemplate "users_content"}}{{template "users_content" .}}{{end}}
-    {{if eq .ContentTemplate "settings_content"}}{{template "settings_content" .}}{{end}}
     {{if eq .ContentTemplate "instance_diagnostics_content"}}{{template "instance_diagnostics_content" .}}{{end}}
     {{if eq .ContentTemplate "docs_content"}}{{template "docs_content" .}}{{end}}
     {{if eq .ContentTemplate "error_content"}}{{template "error_content" .}}{{end}}

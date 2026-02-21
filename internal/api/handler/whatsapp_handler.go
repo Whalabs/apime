@@ -11,7 +11,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waCommon"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/open-apime/apime/internal/pkg/response"
 	messageSvc "github.com/open-apime/apime/internal/service/message"
@@ -38,6 +41,8 @@ func (h *WhatsAppHandler) Register(r *gin.RouterGroup) {
 	r.POST("/instances/:id/whatsapp/presence", h.setPresence)
 	r.POST("/instances/:id/whatsapp/messages/read", h.markRead)
 	r.POST("/instances/:id/whatsapp/messages/delete", h.deleteForEveryone)
+	r.POST("/instances/:id/whatsapp/messages/edit", h.editMessage)
+	r.POST("/instances/:id/whatsapp/messages/react", h.sendReaction)
 	r.GET("/instances/:id/whatsapp/contacts", h.listContacts)
 	r.GET("/instances/:id/whatsapp/contacts/:jid", h.getContact)
 	r.GET("/instances/:id/whatsapp/userinfo/:jid", h.getUserInfo)
@@ -118,7 +123,6 @@ func (h *WhatsAppHandler) checkIsWhatsApp(c *gin.Context) {
 
 	jid, err := h.messageService.ResolveJID(c.Request.Context(), client, phone)
 
-	// Mapear resultado para o formato esperado pela API
 	result := types.IsOnWhatsAppResponse{
 		Query: phone,
 	}
@@ -137,8 +141,6 @@ func (h *WhatsAppHandler) checkIsWhatsApp(c *gin.Context) {
 }
 
 type setPresenceRequest struct {
-	// Para PresenceAvailable/Unavailable, o WhatsMeow só precisa do estado.
-	// Para Composing/Recording/Paused, pode ser necessário enviar para um chat específico.
 	To    string `json:"to"`
 	State string `json:"state" binding:"required"`
 }
@@ -178,7 +180,6 @@ func (h *WhatsAppHandler) setPresence(c *gin.Context) {
 		response.Success(c, http.StatusOK, gin.H{"status": "ok"})
 		return
 	case "composing", "typing", "recording", "audio", "paused", "pause":
-		// handled below
 	default:
 		response.ErrorWithMessage(c, http.StatusBadRequest, "state inválido")
 		return
@@ -491,7 +492,6 @@ func (h *WhatsAppHandler) getNewsletterMessageUpdates(c *gin.Context) {
 		response.ErrorWithMessage(c, http.StatusBadRequest, "jid inválido")
 		return
 	}
-	// A struct GetNewsletterUpdatesParams é interna do fork; manteremos nil por enquanto.
 	updates, err := client.GetNewsletterMessageUpdates(c.Request.Context(), jid, nil)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err)
@@ -767,7 +767,6 @@ func (h *WhatsAppHandler) deleteForEveryone(c *gin.Context) {
 		return
 	}
 
-	// Revoke: por padrão, revoga mensagens "from me". Se sender for informado e diferente, permite revoke admin.
 	senderJID := types.EmptyJID
 	if strings.TrimSpace(req.Sender) != "" {
 		senderStr := strings.TrimSpace(req.Sender)
@@ -783,13 +782,133 @@ func (h *WhatsAppHandler) deleteForEveryone(c *gin.Context) {
 
 	resp, err := client.RevokeMessage(c.Request.Context(), chatJID, types.MessageID(req.MessageID))
 	if err != nil {
-		// fallback: usar BuildRevoke para suportar revoke admin quando sender for informado
 		msg := client.BuildRevoke(chatJID, senderJID, types.MessageID(req.MessageID))
 		resp, err = client.SendMessage(c.Request.Context(), chatJID, msg)
 		if err != nil {
 			response.Error(c, http.StatusInternalServerError, err)
 			return
 		}
+	}
+
+	response.Success(c, http.StatusOK, gin.H{
+		"status":    "ok",
+		"timestamp": resp.Timestamp,
+		"id":        resp.ID,
+	})
+}
+
+type editMessageRequest struct {
+	Chat      string `json:"chat" binding:"required"`
+	MessageID string `json:"message_id" binding:"required"`
+	Text      string `json:"text" binding:"required"`
+}
+
+func (h *WhatsAppHandler) editMessage(c *gin.Context) {
+	instanceID, ok := h.requireInstanceToken(c)
+	if !ok {
+		return
+	}
+
+	var req editMessageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, err)
+		return
+	}
+
+	client, err := h.sessionManager.GetClient(instanceID)
+	if err != nil {
+		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		return
+	}
+
+	chatStr := strings.TrimSpace(req.Chat)
+	if !strings.Contains(chatStr, "@") {
+		chatStr = strings.TrimPrefix(chatStr, "+") + "@s.whatsapp.net"
+	}
+	chatJID, err := types.ParseJID(chatStr)
+	if err != nil {
+		response.ErrorWithMessage(c, http.StatusBadRequest, "chat inválido")
+		return
+	}
+
+	editMsg := client.BuildEdit(chatJID, types.MessageID(req.MessageID), &waE2E.Message{
+		Conversation: proto.String(req.Text),
+	})
+
+	resp, err := client.SendMessage(c.Request.Context(), chatJID, editMsg)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{
+		"status":    "ok",
+		"timestamp": resp.Timestamp,
+		"id":        resp.ID,
+	})
+}
+
+type sendReactionRequest struct {
+	Chat      string `json:"chat" binding:"required"`
+	MessageID string `json:"message_id" binding:"required"`
+	Emoji     string `json:"emoji"`
+	Sender    string `json:"sender"`
+}
+
+func (h *WhatsAppHandler) sendReaction(c *gin.Context) {
+	instanceID, ok := h.requireInstanceToken(c)
+	if !ok {
+		return
+	}
+
+	var req sendReactionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, err)
+		return
+	}
+
+	client, err := h.sessionManager.GetClient(instanceID)
+	if err != nil {
+		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		return
+	}
+
+	chatStr := strings.TrimSpace(req.Chat)
+	if !strings.Contains(chatStr, "@") {
+		chatStr = strings.TrimPrefix(chatStr, "+") + "@s.whatsapp.net"
+	}
+	chatJID, err := types.ParseJID(chatStr)
+	if err != nil {
+		response.ErrorWithMessage(c, http.StatusBadRequest, "chat inválido")
+		return
+	}
+
+	msgKey := &waCommon.MessageKey{
+		RemoteJID: proto.String(chatJID.String()),
+		FromMe:    proto.Bool(false),
+		ID:        proto.String(req.MessageID),
+	}
+
+	if strings.TrimSpace(req.Sender) != "" {
+		senderStr := strings.TrimSpace(req.Sender)
+		if !strings.Contains(senderStr, "@") {
+			senderStr = senderStr + "@s.whatsapp.net"
+		}
+		msgKey.Participant = proto.String(senderStr)
+	}
+
+	waMessage := &waE2E.Message{
+		ReactionMessage: &waE2E.ReactionMessage{
+			Key:               msgKey,
+			Text:              proto.String(strings.TrimSpace(req.Emoji)),
+			SenderTimestampMS: proto.Int64(time.Now().UnixMilli()),
+		},
+	}
+
+	resp, err := client.SendMessage(c.Request.Context(), chatJID, waMessage)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err)
+		return
 	}
 
 	response.Success(c, http.StatusOK, gin.H{
@@ -935,7 +1054,6 @@ func (h *WhatsAppHandler) getContactQRLink(c *gin.Context) {
 	if strings.EqualFold(strings.TrimSpace(c.Query("revoke")), "true") {
 		revoke = true
 	} else {
-		// Compat: permitir body JSON (mesmo em GET) para clientes antigos
 		var req getContactQRLinkRequest
 		_ = c.ShouldBindJSON(&req)
 		revoke = req.Revoke

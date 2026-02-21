@@ -104,7 +104,6 @@ func (s *Service) Enqueue(ctx context.Context, input EnqueueInput) (model.Messag
 		return msg, err
 	}
 
-	// Enfileirar para processamento assíncrono
 	if s.queue != nil {
 		event := queue.Event{
 			ID:         msg.ID,
@@ -172,7 +171,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 	if !client.IsLoggedIn() {
 		ctxUpdate := context.Background()
 		if instToUpdate, fetchErr := s.instanceRepo.GetByID(ctxUpdate, input.InstanceID); fetchErr == nil {
-			instToUpdate.Status = model.InstanceStatusError
+			instToUpdate.Status = model.InstanceStatusDisconnected
 			_, _ = s.instanceRepo.Update(ctxUpdate, instToUpdate)
 		}
 		return model.Message{}, ErrInstanceNotConnected
@@ -398,27 +397,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		var sidecar []byte
 
 		if isPTT {
-			waveform = make([]byte, 64)
-			for i := 0; i < 64; i++ {
-				distFromCenter := math.Abs(float64(i) - 31.5)
-				normalizedDist := distFromCenter / 32.0
-
-				envelope := 1.0 - (normalizedDist * normalizedDist)
-				if envelope < 0 {
-					envelope = 0
-				}
-
-				baseHeight := envelope * 50.0
-				noise := float64(rand.Intn(40))
-
-				finalVal := baseHeight + noise
-				if finalVal > 255 {
-					finalVal = 255
-				}
-
-				waveform[i] = byte(finalVal)
-			}
-
+			waveform = generatePTTWaveform(input.Seconds)
 			sidecar = make([]byte, 16)
 		}
 
@@ -519,7 +498,6 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			}
 		}
 	} else {
-		// Fluxo síncrono original
 		message := model.Message{
 			ID:         uuid.NewString(),
 			InstanceID: input.InstanceID,
@@ -549,7 +527,6 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			_ = client.SendPresence(ctx, types.PresenceAvailable)
 			_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, types.ChatPresenceMediaText)
 
-			// Recalcular dispositivos no retry caso tenha sido um erro de criptografia
 			_, _ = client.GetUserDevices(ctx, []types.JID{toJID})
 		}
 
@@ -575,7 +552,6 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			continue
 		}
 
-		// Tratar Cold Start de Criptografia: no signal session
 		if strings.Contains(err.Error(), "no signal session") {
 			s.log.Warn("sessão de criptografia não estabelecida (cold start), tentando warmup e reenvio",
 				zap.String("to", toJID.String()))
@@ -584,18 +560,39 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		}
 
 		if strings.Contains(err.Error(), "not logged in") {
+			s.log.Warn("instância não logada, abortando retentativas",
+				zap.String("instance_id", input.InstanceID))
+			ctxUpdate := context.Background()
+			if instToUpdate, fetchErr := s.instanceRepo.GetByID(ctxUpdate, input.InstanceID); fetchErr == nil {
+				instToUpdate.Status = model.InstanceStatusDisconnected
+				_, _ = s.instanceRepo.Update(ctxUpdate, instToUpdate)
+			}
+			break
+		}
+
+		if strings.Contains(err.Error(), "device JID") {
+			s.log.Warn("instância desconectada: dispositivo sem sessão ativa",
+				zap.String("instance_id", input.InstanceID),
+				zap.String("to", toJID.String()))
+			ctxUpdate := context.Background()
+			if instToUpdate, fetchErr := s.instanceRepo.GetByID(ctxUpdate, input.InstanceID); fetchErr == nil {
+				instToUpdate.Status = model.InstanceStatusDisconnected
+				_, _ = s.instanceRepo.Update(ctxUpdate, instToUpdate)
+			}
 			break
 		}
 	}
 
-	// Limpar o status "digitando" após o envio (sucesso ou falha final)
 	_ = client.SendChatPresence(ctx, toJID, types.ChatPresencePaused, types.ChatPresenceMediaText)
 
 	if err != nil {
 		jidCache.Delete(input.To)
 		s.log.Info("Removido do cache de JID devido a erro de envio", zap.String("phone", input.To))
 
-		if !strings.Contains(err.Error(), "not logged in") && !strings.Contains(err.Error(), "connection") {
+		isDisconnectedErr := strings.Contains(err.Error(), "not logged in") ||
+			strings.Contains(err.Error(), "device JID")
+
+		if !isDisconnectedErr && !strings.Contains(err.Error(), "connection") {
 			if s.contactRepo != nil {
 				_ = s.contactRepo.Upsert(ctx, model.Contact{
 					Phone: input.To,
@@ -606,6 +603,11 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 
 		msg.Status = "failed"
 		_ = s.repo.Update(ctx, msg)
+
+		if strings.Contains(err.Error(), "device JID") || strings.Contains(err.Error(), "not logged in") {
+			return msg, fmt.Errorf("Desconectado")
+		}
+
 		return msg, fmt.Errorf("erro ao enviar mensagem após %d tentativas: %w", maxRetries, err)
 	}
 
@@ -662,7 +664,6 @@ func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phon
 	if s.contactRepo != nil {
 		if contact, err := s.contactRepo.GetByPhone(ctx, phone); err == nil {
 			if contact.JID == "" {
-				// Cache Negativo no Banco: Se foi atualizado no período configurado e está vazio, é inválido
 				negativeTTL := time.Duration(s.cfg.JIDCacheNegativeTTLDays) * 24 * time.Hour
 				if time.Since(contact.UpdatedAt) < negativeTTL {
 					s.log.Debug("JID negativo (não está no WhatsApp) resolvido via banco de dados", zap.String("phone", phone))
@@ -682,13 +683,10 @@ func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phon
 	}
 
 	if !strings.HasPrefix(phone, "55") {
-		// Se não for BR, apenas tenta parsear sem validar (ou você pode validar se preferir)
 		return types.ParseJID(phone + "@s.whatsapp.net")
 	}
 
-	// Simulando comportamento humano com delay aleatório antes da consulta real
-	// Isso evita padrões robóticos de consulta rápida
-	delay := 1000 + rand.Intn(2000) // 1s a 3s
+	delay := 1000 + rand.Intn(2000)
 	s.log.Debug("Aplicando delay de segurança antes de IsOnWhatsApp", zap.Int("ms", delay))
 	time.Sleep(time.Duration(delay) * time.Millisecond)
 
@@ -721,7 +719,6 @@ func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phon
 	if resolvedJID.IsEmpty() {
 		negativeTTL := time.Duration(s.cfg.JIDCacheNegativeTTLDays) * 24 * time.Hour
 		s.log.Warn("WhatsApp não encontrado - registrando em cache negativo", zap.String("original_phone", phone), zap.Any("candidates", candidates), zap.Duration("ttl", negativeTTL))
-		// Cache Negativo: Evita reconsultar números que sabemos que não existem
 		jidCache.Store(phone, jidCacheEntry{jid: types.EmptyJID, expiresAt: time.Now().Add(negativeTTL)})
 
 		if s.contactRepo != nil {
@@ -744,4 +741,65 @@ func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phon
 	}
 
 	return resolvedJID, nil
+}
+
+func generatePTTWaveform(seconds int) []byte {
+	const size = 64
+	waveform := make([]byte, size)
+
+	numSegments := 2 + rand.Intn(3)
+	if seconds > 10 {
+		numSegments = 3 + rand.Intn(3)
+	}
+
+	type segment struct {
+		center    float64
+		width     float64
+		intensity float64
+	}
+
+	segments := make([]segment, numSegments)
+	for i := range segments {
+		basePos := (float64(i) + 0.5) / float64(numSegments)
+		segments[i] = segment{
+			center:    basePos*float64(size) + float64(rand.Intn(6)-3),
+			width:     float64(4 + rand.Intn(10)),
+			intensity: 30.0 + float64(rand.Intn(70)), // 30-100
+		}
+	}
+
+	mainPeak := rand.Intn(numSegments)
+	segments[mainPeak].intensity = 70.0 + float64(rand.Intn(50)) // 70-120
+	segments[mainPeak].width = float64(6 + rand.Intn(12))
+
+	for i := 0; i < size; i++ {
+		val := float64(rand.Intn(8))
+
+		for _, seg := range segments {
+			dist := math.Abs(float64(i) - seg.center)
+			if dist < seg.width {
+				normalized := dist / seg.width
+				contribution := seg.intensity * math.Exp(-3.0*normalized*normalized)
+				contribution *= 0.7 + 0.3*math.Sin(float64(i)*0.8+float64(rand.Intn(10)))
+				val += contribution
+			}
+		}
+
+		if val > 10 {
+			val += float64(rand.Intn(int(val/5) + 1))
+		}
+
+		if val > 255 {
+			val = 255
+		}
+		waveform[i] = byte(val)
+	}
+
+	for i := 0; i < 3; i++ {
+		factor := float64(i+1) / 4.0
+		waveform[i] = byte(float64(waveform[i]) * factor)
+		waveform[size-1-i] = byte(float64(waveform[size-1-i]) * factor)
+	}
+
+	return waveform
 }

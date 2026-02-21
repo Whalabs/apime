@@ -3,6 +3,8 @@ package whatsmeow
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
@@ -51,6 +53,57 @@ var (
 	deviceConfigMu sync.Mutex
 )
 
+type deviceProfile struct {
+	PlatformType string
+	OSName       string
+	Version      [3]uint32
+}
+
+var deviceProfiles = []deviceProfile{
+	// Chrome on Windows (most common)
+	{PlatformType: "CHROME", OSName: "Windows", Version: [3]uint32{10, 0, 0}},
+	{PlatformType: "CHROME", OSName: "Windows", Version: [3]uint32{10, 0, 0}},
+	// Chrome on macOS
+	{PlatformType: "CHROME", OSName: "Mac OS", Version: [3]uint32{15, 3, 0}},
+	{PlatformType: "CHROME", OSName: "Mac OS", Version: [3]uint32{14, 7, 0}},
+	// Chrome on Linux
+	{PlatformType: "CHROME", OSName: "Linux", Version: [3]uint32{6, 8, 0}},
+	// Firefox on Windows
+	{PlatformType: "FIREFOX", OSName: "Windows", Version: [3]uint32{10, 0, 0}},
+	// Firefox on macOS
+	{PlatformType: "FIREFOX", OSName: "Mac OS", Version: [3]uint32{15, 3, 0}},
+	// Firefox on Linux
+	{PlatformType: "FIREFOX", OSName: "Linux", Version: [3]uint32{6, 12, 0}},
+	// Safari on macOS
+	{PlatformType: "SAFARI", OSName: "Mac OS", Version: [3]uint32{15, 3, 0}},
+	// Edge on Windows
+	{PlatformType: "EDGE", OSName: "Windows", Version: [3]uint32{10, 0, 0}},
+}
+
+func tempBanReasonPT(code events.TempBanReason) string {
+	switch code {
+	case events.TempBanSentToTooManyPeople:
+		return "Enviou mensagens para muitas pessoas que não têm seu número salvo"
+	case events.TempBanBlockedByUsers:
+		return "Muitas pessoas bloquearam este número"
+	case events.TempBanCreatedTooManyGroups:
+		return "Criou muitos grupos com pessoas que não têm seu número salvo"
+	case events.TempBanSentTooManySameMessage:
+		return "Enviou a mesma mensagem para muitas pessoas"
+	case events.TempBanBroadcastList:
+		return "Enviou muitas mensagens para lista de transmissão"
+	default:
+		return "Possível violação dos termos de serviço"
+	}
+}
+
+func getDeviceProfile(instanceID string) deviceProfile {
+	h := fnv.New32a()
+	h.Write([]byte(instanceID))
+	idx := int(h.Sum32()) % len(deviceProfiles)
+	return deviceProfiles[idx]
+}
+
 type EventHandler interface {
 	Handle(ctx context.Context, instanceID string, instanceJID string, client *whatsmeow.Client, evt any)
 }
@@ -67,9 +120,9 @@ type Manager struct {
 	storageDriver      string
 	baseDir            string
 	pgConnString       string
-	deviceConfigRepo   storage.DeviceConfigRepository
 	instanceRepo       storage.InstanceRepository
 	historySyncRepo    storage.HistorySyncRepository
+	eventLogRepo       storage.EventLogRepository
 	onStatusChange     func(instanceID string, status string)
 	eventHandler       EventHandler
 	syncWorkers        map[string]context.CancelFunc
@@ -80,7 +133,7 @@ type Manager struct {
 	sharedContainer    *sqlstore.Container
 }
 
-func NewManager(log *zap.Logger, encKey, storageDriver, baseDir, pgConnString string, deviceConfigRepo storage.DeviceConfigRepository, instanceRepo storage.InstanceRepository, historySyncRepo storage.HistorySyncRepository, messageRepo storage.MessageRepository) *Manager {
+func NewManager(log *zap.Logger, encKey, storageDriver, baseDir, pgConnString string, instanceRepo storage.InstanceRepository, historySyncRepo storage.HistorySyncRepository, messageRepo storage.MessageRepository, eventLogRepo storage.EventLogRepository) *Manager {
 	var sharedContainer *sqlstore.Container
 
 	if storageDriver != "postgres" {
@@ -113,9 +166,9 @@ func NewManager(log *zap.Logger, encKey, storageDriver, baseDir, pgConnString st
 		storageDriver:      storageDriver,
 		baseDir:            baseDir,
 		pgConnString:       pgConnString,
-		deviceConfigRepo:   deviceConfigRepo,
 		instanceRepo:       instanceRepo,
 		historySyncRepo:    historySyncRepo,
+		eventLogRepo:       eventLogRepo,
 		syncWorkers:        make(map[string]context.CancelFunc),
 		disconnectDebounce: make(map[string]*time.Timer),
 		expectedDisconnect: make(map[string]bool),
@@ -306,15 +359,12 @@ func (m *Manager) createSession(ctx context.Context, instanceID string, forceRec
 		}
 	}
 
-	if err := m.applyDeviceConfig(ctx, deviceStore); err != nil {
-		m.log.Warn("erro ao aplicar configurações de dispositivo", zap.String("instance_id", instanceID), zap.Error(err))
-	}
+	m.applyDeviceConfig(instanceID, deviceStore)
 
 	client := whatsmeow.NewClient(deviceStore, clientLog)
 	client.EnableAutoReconnect = true
 	client.ManualHistorySyncDownload = true
 
-	// Configurar callback para recuperar mensagens para retry via banco de dados
 	client.GetMessageForRetry = m.getMessageForRetryCallback(instanceID)
 
 	client.AddEventHandler(func(evt any) {
@@ -392,13 +442,11 @@ func (m *Manager) monitorQRChannel(instanceID string, client *whatsmeow.Client, 
 
 	defer func() {
 		cancel()
-		// Limpar estado do QR quando o canal fecha (expiração ou sucesso)
 		m.mu.Lock()
 		delete(m.qrContexts, instanceID)
 		delete(m.currentQRs, instanceID)
 		m.mu.Unlock()
 
-		// Se o pareamento não teve sucesso, limpar cliente e device store parcial
 		if !pairingSucceeded {
 			m.log.Warn("canal QR encerrado sem pareamento, limpando estado",
 				zap.String("instance_id", instanceID))
@@ -409,7 +457,6 @@ func (m *Manager) monitorQRChannel(instanceID string, client *whatsmeow.Client, 
 				delete(m.clients, instanceID)
 				m.mu.Unlock()
 
-				// Limpar device store parcial (SQLite)
 				if m.storageDriver != "postgres" {
 					dbPath := filepath.Join(m.baseDir, instanceID+".db")
 					if _, err := os.Stat(dbPath); err == nil {
@@ -550,8 +597,6 @@ func (m *Manager) GetQR(ctx context.Context, instanceID string) (string, error) 
 					return currentQR, nil
 				}
 				if !stillHasQRContext {
-					// Contexto QR foi limpo durante a espera (canal expirou)
-					// Forçar recriação da sessão
 					m.log.Info("contexto QR expirou durante espera, recriando sessão",
 						zap.String("instance_id", instanceID))
 					return m.CreateSession(ctx, instanceID)
@@ -599,13 +644,11 @@ func (m *Manager) GetQR(ctx context.Context, instanceID string) (string, error) 
 		return m.CreateSession(ctx, instanceID)
 	}
 
-	// Verificar se já existe sessão ativa antes de criar nova
 	client, err := m.restoreSessionIfExists(ctx, instanceID)
 	if err == nil && client != nil && client.IsLoggedIn() {
 		return "", fmt.Errorf("instância já conectada, não é necessário QR code")
 	}
 
-	// Limpar sessão inválida/expirada
 	if m.storageDriver != "postgres" {
 		dbPath := filepath.Join(m.baseDir, instanceID+".db")
 		if _, err := os.Stat(dbPath); err == nil {
@@ -707,7 +750,8 @@ func (m *Manager) DeleteSession(instanceID string) error {
 		m.logoutClient(instanceID, client)
 	}
 
-	// Limpar WhatsAppJID e status no banco para evitar restauração de sessão antiga
+	m.logConnectionEvent(instanceID, "manual_disconnect", `{"message":"Desconectado manualmente pelo usuário"}`)
+
 	if m.instanceRepo != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -996,14 +1040,10 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 		zap.String("push_name", deviceStore.PushName),
 	)
 
-	if err := m.applyDeviceConfig(ctx, deviceStore); err != nil {
-		m.log.Warn("erro ao aplicar configurações de dispositivo", zap.String("instance_id", instanceID), zap.Error(err))
-
-	}
+	m.applyDeviceConfig(instanceID, deviceStore)
 
 	client := whatsmeow.NewClient(deviceStore, clientLog)
 
-	// Configurar callback para recuperar mensagens para retry via banco de dados
 	client.GetMessageForRetry = m.getMessageForRetryCallback(instanceID)
 
 	client.AddEventHandler(func(evt any) {
@@ -1110,13 +1150,13 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 }
 
 func (m *Manager) RestoreAllSessions(ctx context.Context, instanceIDs []string) {
-	m.log.Info("iniciando restauração de todas as sessões",
+	m.log.Info("iniciando restauração escalonada de sessões",
 		zap.Int("total_instances", len(instanceIDs)),
 		zap.String("storage", m.storageDriver),
 	)
 
+	var toRestore []string
 	for _, instanceID := range instanceIDs {
-
 		m.mu.RLock()
 		client, exists := m.clients[instanceID]
 		m.mu.RUnlock()
@@ -1138,27 +1178,71 @@ func (m *Manager) RestoreAllSessions(ctx context.Context, instanceIDs []string) 
 			}
 		}
 
-		go func(id string) {
-			client, err := m.restoreSessionIfExists(ctx, id)
-			if err != nil {
-				m.log.Debug("não foi possível restaurar sessão na inicialização",
-					zap.String("instance_id", id),
-					zap.Error(err),
-				)
-
-				return
-			}
-
-			if client != nil && client.IsLoggedIn() {
-				m.log.Info("sessão restaurada com sucesso na inicialização",
-					zap.String("instance_id", id),
-				)
-
-			}
-		}(instanceID)
+		toRestore = append(toRestore, instanceID)
 	}
 
-	m.log.Info("restauração de sessões iniciada em background")
+	if len(toRestore) == 0 {
+		m.log.Info("nenhuma sessão para restaurar")
+		return
+	}
+
+	const batchSize = 5
+	totalBatches := (len(toRestore) + batchSize - 1) / batchSize
+
+	go func() {
+		for i := 0; i < len(toRestore); i += batchSize {
+			end := i + batchSize
+			if end > len(toRestore) {
+				end = len(toRestore)
+			}
+
+			batch := toRestore[i:end]
+			batchNum := i/batchSize + 1
+
+			m.log.Info("restaurando lote de sessões",
+				zap.Int("batch", batchNum),
+				zap.Int("total_batches", totalBatches),
+				zap.Int("sessions_in_batch", len(batch)),
+			)
+
+			for _, id := range batch {
+				go func(instanceID string) {
+					client, err := m.restoreSessionIfExists(ctx, instanceID)
+					if err != nil {
+						m.log.Debug("não foi possível restaurar sessão na inicialização",
+							zap.String("instance_id", instanceID),
+							zap.Error(err),
+						)
+						return
+					}
+					if client != nil && client.IsLoggedIn() {
+						m.log.Info("sessão restaurada com sucesso",
+							zap.String("instance_id", instanceID),
+						)
+					}
+				}(id)
+			}
+
+			if end < len(toRestore) {
+				delay := 10 + rand.Intn(21) // 10-30 seconds
+				m.log.Info("aguardando antes do próximo lote",
+					zap.Int("next_batch", batchNum+1),
+					zap.Int("delay_seconds", delay),
+				)
+				time.Sleep(time.Duration(delay) * time.Second)
+			}
+		}
+
+		m.log.Info("restauração escalonada concluída",
+			zap.Int("total_restored", len(toRestore)),
+			zap.Int("total_batches", totalBatches),
+		)
+	}()
+
+	m.log.Info("restauração escalonada iniciada em background",
+		zap.Int("sessions", len(toRestore)),
+		zap.Int("batches", totalBatches),
+	)
 }
 
 type DiagnosticsInfo struct {
@@ -1308,30 +1392,13 @@ func mapPlatformType(platformType string) *waCompanionReg.DeviceProps_PlatformTy
 	}
 }
 
-func (m *Manager) applyDeviceConfig(ctx context.Context, deviceStore *store.Device) error {
-	if m.deviceConfigRepo == nil {
-		return nil
+func (m *Manager) applyDeviceConfig(instanceID string, deviceStore *store.Device) {
+	if deviceStore.ID != nil && !deviceStore.ID.IsEmpty() {
+		return
 	}
 
-	config, err := m.deviceConfigRepo.Get(ctx)
-	if err != nil {
-		m.log.Warn("erro ao buscar configurações, usando padrão", zap.Error(err))
-		return nil
-	}
+	profile := getDeviceProfile(instanceID)
 
-	if deviceStore.ID == nil || deviceStore.ID.IsEmpty() {
-		m.applyDevicePropsForRegistration(ctx, config)
-	}
-
-	m.log.Info("configurações de dispositivo aplicadas",
-		zap.String("platform_type", config.PlatformType),
-		zap.String("os_name", config.OSName),
-	)
-
-	return nil
-}
-
-func (m *Manager) applyDevicePropsForRegistration(ctx context.Context, config model.DeviceConfig) {
 	deviceConfigMu.Lock()
 	defer deviceConfigMu.Unlock()
 
@@ -1341,13 +1408,14 @@ func (m *Manager) applyDevicePropsForRegistration(ctx context.Context, config mo
 	originalVersionSecondary := store.DeviceProps.Version.Secondary
 	originalVersionTertiary := store.DeviceProps.Version.Tertiary
 
-	store.SetOSInfo(config.OSName, [3]uint32{1, 0, 0})
+	store.SetOSInfo(profile.OSName, profile.Version)
+	store.DeviceProps.PlatformType = mapPlatformType(profile.PlatformType)
 
-	store.DeviceProps.PlatformType = mapPlatformType(config.PlatformType)
-
-	m.log.Debug("configurações globais aplicadas para registro",
-		zap.String("platform_type", config.PlatformType),
-		zap.String("os_name", config.OSName),
+	m.log.Info("perfil de dispositivo aplicado para registro",
+		zap.String("instance_id", instanceID),
+		zap.String("platform_type", profile.PlatformType),
+		zap.String("os_name", profile.OSName),
+		zap.String("version", fmt.Sprintf("%d.%d.%d", profile.Version[0], profile.Version[1], profile.Version[2])),
 	)
 
 	go func() {
@@ -1400,7 +1468,6 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 				zap.Strings("msg_ids", receipt.MessageIDs),
 				zap.String("chat", receipt.Chat.String()))
 
-			// Resetar sessão e IDENTIDADE imediatamente para o contato
 			go func() {
 				m.log.Info("Acionando reset completo (sessão + identidade) devido a retry receipt",
 					zap.String("instance_id", instanceID),
@@ -1424,6 +1491,12 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 		m.expectedDisconnect[instanceID] = false
 		m.connectedAt[instanceID] = time.Now()
 		m.mu.Unlock()
+
+		if client != nil {
+			jitterHash := fnv.New32a()
+			jitterHash.Write([]byte(instanceID))
+			client.AutoReconnectErrors = int(jitterHash.Sum32()%15) + 1 // 1-15 → delay 2-30s
+		}
 
 		if handler != nil {
 			go handler.Handle(context.Background(), instanceID, instanceJID, client, v)
@@ -1476,6 +1549,8 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 			}()
 		}
 
+		m.logConnectionEvent(instanceID, "connected", `{"message":"Instância conectada ao WhatsApp"}`)
+
 		if callback != nil {
 			callback(instanceID, "active")
 		}
@@ -1510,6 +1585,7 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 				m.mu.Unlock()
 
 				m.log.Warn("debounce expirado, confirmando desconexão", zap.String("instance_id", instanceID))
+				m.logConnectionEvent(instanceID, "disconnected", `{"message":"Conexão perdida com o WhatsApp"}`)
 				m.updateInstanceStatus(instanceID, model.InstanceStatusError)
 				if callback != nil {
 					callback(instanceID, "error")
@@ -1537,12 +1613,17 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 			timer.Stop()
 			delete(m.disconnectDebounce, instanceID)
 		}
+		wasManual := m.expectedDisconnect[instanceID]
 		m.mu.Unlock()
 
 		m.log.Warn("instância deslogada",
 			zap.String("instance_id", instanceID),
 			zap.String("reason", v.Reason.String()),
 		)
+
+		if !wasManual {
+			m.logConnectionEvent(instanceID, "logged_out", fmt.Sprintf(`{"message":"Dispositivo removido pelo WhatsApp","reason":"%s"}`, v.Reason.String()))
+		}
 
 		if handler != nil {
 			go handler.Handle(context.Background(), instanceID, instanceJID, client, v)
@@ -1563,6 +1644,17 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 			zap.String("code", v.Code.String()),
 			zap.Duration("expire", v.Expire),
 		)
+
+		banReason := tempBanReasonPT(v.Code)
+		expireStr := ""
+		if v.Expire > 0 {
+			expireStr = v.Expire.String()
+		}
+		m.logConnectionEvent(instanceID, "temporary_ban", fmt.Sprintf(
+			`{"message":"Ban temporário pelo WhatsApp","reason":"%s","code":%d,"expire":"%s"}`,
+			banReason, int(v.Code), expireStr,
+		))
+
 		m.updateInstanceStatus(instanceID, model.InstanceStatusError)
 		if callback != nil {
 			callback(instanceID, "error")
@@ -1573,6 +1665,10 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 			zap.String("reason", v.Reason.String()),
 			zap.String("message", v.Message),
 		)
+		m.logConnectionEvent(instanceID, "connect_failure", fmt.Sprintf(
+			`{"message":"Falha ao conectar ao WhatsApp","reason":"%s","detail":"%s"}`,
+			v.Reason.String(), v.Message,
+		))
 		m.updateInstanceStatus(instanceID, model.InstanceStatusError)
 		if callback != nil {
 			callback(instanceID, "error")
@@ -1582,6 +1678,10 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 			zap.String("instance_id", instanceID),
 			zap.String("code", v.Code),
 		)
+		m.logConnectionEvent(instanceID, "stream_error", fmt.Sprintf(
+			`{"message":"Erro de comunicação com o WhatsApp","code":"%s"}`,
+			v.Code,
+		))
 		m.updateInstanceStatus(instanceID, model.InstanceStatusError)
 		if callback != nil {
 			callback(instanceID, "error")
@@ -1751,7 +1851,6 @@ func (m *Manager) ResetContactSession(ctx context.Context, instanceID, jidStr st
 		return err
 	}
 
-	// 1. Deletar a sessão (chaves efêmeras)
 	err = client.Store.Sessions.DeleteSession(ctx, jid.SignalAddress().String())
 	if err != nil {
 		m.log.Warn("aviso: falha ao deletar sessão do contato (pode não existir)",
@@ -1761,8 +1860,6 @@ func (m *Manager) ResetContactSession(ctx context.Context, instanceID, jidStr st
 		)
 	}
 
-	// 2. Deletar a identidade (chaves de longo prazo/confiança)
-	// Essencial para casos onde o contato mudou de Normal para Business ou trocou de aparelho
 	err = client.Store.Identities.DeleteIdentity(ctx, jid.SignalAddress().String())
 	if err != nil {
 		m.log.Warn("aviso: falha ao deletar identidade do contato",
@@ -1807,6 +1904,27 @@ func (m *Manager) updateInstanceStatus(instanceID string, status model.InstanceS
 			zap.String("status", string(status)),
 		)
 	}
+}
+
+func (m *Manager) logConnectionEvent(instanceID, eventType, payload string) {
+	if m.eventLogRepo == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := m.eventLogRepo.Create(ctx, model.EventLog{
+			InstanceID: instanceID,
+			Type:       eventType,
+			Payload:    payload,
+		}); err != nil {
+			m.log.Warn("erro ao gravar evento de conexão",
+				zap.String("instance_id", instanceID),
+				zap.String("event_type", eventType),
+				zap.Error(err),
+			)
+		}
+	}()
 }
 
 func (m *Manager) ListInstances() []string {

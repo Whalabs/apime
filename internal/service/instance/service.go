@@ -215,7 +215,6 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		return err
 	}
 
-	// Deletar sessão completamente (incluindo arquivo SQLite) se existir
 	if s.session != nil {
 		_ = s.session.DeleteSession(id)
 	}
@@ -296,4 +295,18 @@ func (s *Service) rotateToken(ctx context.Context, inst model.Instance) (string,
 		return "", err
 	}
 	return plain, nil
+}
+
+func (s *Service) ListEvents(ctx context.Context, instanceID string, limit int) ([]model.EventLog, error) {
+	if s.eventLogRepo == nil {
+		return nil, nil
+	}
+	events, err := s.eventLogRepo.ListByInstance(ctx, instanceID)
+	if err != nil {
+		return nil, err
+	}
+	if limit > 0 && len(events) > limit {
+		events = events[:limit]
+	}
+	return events, nil
 }

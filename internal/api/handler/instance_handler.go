@@ -50,6 +50,7 @@ func (h *InstanceHandler) Register(r *gin.RouterGroup) {
 	r.GET("/instances/:id/profile/:jid", h.getProfile)
 	r.GET("/instances/:id/business/:jid", h.getBusinessProfile)
 	r.GET("/instances/:id/profile/:jid/picture", h.getProfilePicture)
+	r.GET("/instances/:id/events", h.listEvents)
 }
 
 type createInstanceRequest struct {
@@ -148,7 +149,7 @@ func (h *InstanceHandler) update(c *gin.Context) {
 		Name:          req.Name,
 		WebhookURL:    req.WebhookURL,
 		WebhookSecret: req.WebhookSecret,
-		OwnerUserID:   userRole, // Passamos o role para verificação de permissão
+		OwnerUserID:   userRole,
 	})
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err)
@@ -164,7 +165,6 @@ func (h *InstanceHandler) delete(c *gin.Context) {
 		return
 	}
 
-	// Obter informações do usuário do contexto
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
@@ -181,7 +181,6 @@ func (h *InstanceHandler) rotateToken(c *gin.Context) {
 		response.ErrorWithMessage(c, http.StatusForbidden, "endpoint disponível apenas com token de usuário")
 		return
 	}
-	// Obter informações do usuário do contexto
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
@@ -207,7 +206,6 @@ func (h *InstanceHandler) getQR(c *gin.Context) {
 		}
 		qr, err = h.service.GetQR(c.Request.Context(), id)
 	} else {
-		// Obter informações do usuário do contexto
 		userID := c.GetString("userID")
 		userRole := c.GetString("userRole")
 		qr, err = h.service.GetQRByUser(c.Request.Context(), id, userID, userRole)
@@ -219,7 +217,6 @@ func (h *InstanceHandler) getQR(c *gin.Context) {
 			zap.Error(err),
 			zap.String("error_type", getErrorType(err)))
 
-		// Determinar status code apropriado baseado no tipo de erro
 		statusCode := http.StatusInternalServerError
 		errorMsg := err.Error()
 
@@ -245,7 +242,6 @@ func (h *InstanceHandler) getQR(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"qr": qr})
 }
 
-// getErrorType retorna o tipo de erro para logging
 func getErrorType(err error) string {
 	if err == nil {
 		return "unknown"
@@ -282,7 +278,6 @@ func (h *InstanceHandler) disconnect(c *gin.Context) {
 		return
 	}
 
-	// Obter informações do usuário do contexto
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
@@ -322,7 +317,6 @@ func (h *InstanceHandler) getInstanceInfo(c *gin.Context) {
 
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		// Se não conseguiu obter o cliente e o status está como active, atualizar
 		if instance.Status == model.InstanceStatusActive {
 			ctxUpdate := c.Request.Context()
 			if _, updateErr := h.service.UpdateStatus(ctxUpdate, instanceID, model.InstanceStatusError); updateErr != nil {
@@ -341,7 +335,6 @@ func (h *InstanceHandler) getInstanceInfo(c *gin.Context) {
 
 	isLoggedIn := client.IsLoggedIn()
 	if !isLoggedIn && instance.Status == model.InstanceStatusActive {
-		// Atualizar status no banco se não estiver logado mas status está como active
 		ctxUpdate := c.Request.Context()
 		if _, updateErr := h.service.UpdateStatus(ctxUpdate, instanceID, model.InstanceStatusError); updateErr != nil {
 			h.log.Warn("erro ao atualizar status da instância", zap.String("instance_id", instanceID), zap.Error(updateErr))
@@ -494,4 +487,30 @@ func (h *InstanceHandler) getProfilePicture(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, pictureInfo)
+}
+
+func (h *InstanceHandler) listEvents(c *gin.Context) {
+	instanceID := c.Param("id")
+	if instanceID == "" {
+		response.Error(c, http.StatusBadRequest, fmt.Errorf("id é obrigatório"))
+		return
+	}
+
+	limit := 10
+	if q := c.Query("limit"); q != "" {
+		if n, err := fmt.Sscanf(q, "%d", &limit); err != nil || n != 1 || limit < 1 {
+			limit = 10
+		}
+		if limit > 100 {
+			limit = 100
+		}
+	}
+
+	events, err := h.service.ListEvents(c.Request.Context(), instanceID, limit)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, events)
 }

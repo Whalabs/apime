@@ -80,14 +80,6 @@ type APIToken struct {
 	UpdatedAt  time.Time  `json:"updatedAt"`
 }
 
-type DeviceConfig struct {
-	ID           string    `json:"id"`
-	PlatformType string    `json:"platformType"`
-	OSName       string    `json:"osName"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
-}
-
 type HistorySyncStatus string
 
 const (

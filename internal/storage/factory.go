@@ -21,7 +21,6 @@ type Repositories struct {
 	EventLog     EventLogRepository
 	User         UserRepository
 	APIToken     APITokenRepository
-	DeviceConfig DeviceConfigRepository
 	HistorySync  HistorySyncRepository
 	Contact      ContactRepository
 	RedisClient  *storage_redis.Client
@@ -83,7 +82,6 @@ func NewRepositories(cfg config.Config, log *zap.Logger) (*Repositories, error) 
 			EventLog:     sqlite.NewEventLogRepository(db),
 			User:         sqlite.NewUserRepository(db),
 			APIToken:     sqlite.NewAPITokenRepository(db),
-			DeviceConfig: sqlite.NewDeviceConfigRepository(db),
 			HistorySync:  sqlite.NewHistorySyncRepository(db),
 			Contact:      sqlite.NewContactRepository(db),
 			RedisClient:  storeRedis,
@@ -107,7 +105,6 @@ func NewRepositories(cfg config.Config, log *zap.Logger) (*Repositories, error) 
 			EventLog:     postgres.NewEventLogRepository(db),
 			User:         postgres.NewUserRepository(db),
 			APIToken:     postgres.NewAPITokenRepository(db),
-			DeviceConfig: postgres.NewDeviceConfigRepository(db),
 			HistorySync:  postgres.NewHistorySyncRepository(db),
 			Contact:      postgres.NewContactRepository(db),
 			RedisClient:  storeRedis,
