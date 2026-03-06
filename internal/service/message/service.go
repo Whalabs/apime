@@ -47,6 +47,7 @@ type Service struct {
 	sessionMgr   SessionManager
 	instanceRepo storage.InstanceRepository
 	contactRepo  storage.ContactRepository
+	eventLogRepo storage.EventLogRepository
 	queue        queue.Queue
 	cfg          config.WhatsAppConfig
 	log          *zap.Logger
@@ -69,12 +70,13 @@ func NewService(repo storage.MessageRepository, q queue.Queue, cfg config.WhatsA
 	}
 }
 
-func NewServiceWithSession(repo storage.MessageRepository, sessionMgr SessionManager, instanceRepo storage.InstanceRepository, contactRepo storage.ContactRepository, q queue.Queue, cfg config.WhatsAppConfig, log *zap.Logger) *Service {
+func NewServiceWithSession(repo storage.MessageRepository, sessionMgr SessionManager, instanceRepo storage.InstanceRepository, contactRepo storage.ContactRepository, eventLogRepo storage.EventLogRepository, q queue.Queue, cfg config.WhatsAppConfig, log *zap.Logger) *Service {
 	return &Service{
 		repo:         repo,
 		sessionMgr:   sessionMgr,
 		instanceRepo: instanceRepo,
 		contactRepo:  contactRepo,
+		eventLogRepo: eventLogRepo,
 		queue:        q,
 		cfg:          cfg,
 		log:          log,
@@ -570,6 +572,26 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 				zap.String("to", toJID.String()))
 			_, _ = client.GetUserDevices(ctx, []types.JID{toJID})
 			continue
+		}
+
+		if strings.Contains(err.Error(), "error 463") {
+			s.log.Warn("WhatsApp restrito (error 463), abortando retentativas",
+				zap.String("instance_id", input.InstanceID),
+				zap.String("to", toJID.String()))
+			// Registrar evento no log da conexão
+			if s.eventLogRepo != nil {
+				go func() {
+					evtCtx, evtCancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer evtCancel()
+					payload := `{"message":"WhatsApp restrito (error 463)","reason":"server returned error 463","detail":"Conta possivelmente restrita ou banida pelo WhatsApp"}`
+					_, _ = s.eventLogRepo.Create(evtCtx, model.EventLog{
+						InstanceID: input.InstanceID,
+						Type:       "temporary_ban",
+						Payload:    payload,
+					})
+				}()
+			}
+			break
 		}
 
 		if strings.Contains(err.Error(), "not logged in") {

@@ -137,7 +137,7 @@ func main() {
 	}
 
 	logr.Debug("inicializando serviços")
-	messageService := message.NewServiceWithSession(repos.Message, sessionManager, repos.Instance, repos.Contact, repos.OutboxQueue, cfg.WhatsApp, logr)
+	messageService := message.NewServiceWithSession(repos.Message, sessionManager, repos.Instance, repos.Contact, repos.EventLog, repos.OutboxQueue, cfg.WhatsApp, logr)
 	outboxWorker := message.NewOutboxWorker(messageService, repos.OutboxQueue, logr, cfg.App.OutboxWorkers)
 	outboxWorker.Start(context.Background())
 	logr.Info("outbox worker iniciado", zap.Int("workers", cfg.App.OutboxWorkers))
