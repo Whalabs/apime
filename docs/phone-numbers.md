@@ -27,11 +27,12 @@ A API **não** adiciona sufixo automaticamente para grupos.
 Para números brasileiros (prefixo `55`), a API utiliza uma verificação dinâmica para determinar o formato correto (com ou sem o 9º dígito), consultando diretamente os servidores do WhatsApp.
 
 ### O Processo de Validação
-O código não faz distinção rígida entre fixo e celular baseada apenas em faixas de DDD. Em vez disso:
+O código distingue fixos de celulares pela regra ANATEL: números que iniciam com 2-5 após o DDD são fixos e **nunca** recebem o 9º dígito.
 
 1. **Geração de Candidatos**:
    - Se o número tem **13 dígitos** (ex: `5511999998888`), o sistema gera uma opção **sem** o 9º dígito (`551199998888`).
-   - Se o número tem **12 dígitos** (ex: `551133334444`), o sistema gera uma opção **com** o 9º dígito (`5511933334444`).
+   - Se o número tem **12 dígitos** e **não é fixo** (prefixo após DDD não é 2-5), o sistema gera uma opção **com** o 9º dígito.
+   - Se o número tem **12 dígitos** e **é fixo** (prefixo 2-5, ex: `554141010021`), **não** gera variante com 9.
    
 2. **Consulta (IsOnWhatsApp)**:
    - O sistema envia ambos os formatos para a API do WhatsApp para verificar qual deles (ou ambos) possui uma conta ativa.

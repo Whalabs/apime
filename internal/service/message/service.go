@@ -731,8 +731,13 @@ func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phon
 		optionWithout9 := phone[:4] + phone[5:]
 		candidates = append(candidates, optionWithout9)
 	} else if len(phone) == 12 {
-		optionWith9 := phone[:4] + "9" + phone[4:]
-		candidates = append(candidates, optionWith9)
+		afterDDD := phone[4:]
+		if len(afterDDD) > 0 && afterDDD[0] >= '2' && afterDDD[0] <= '5' {
+			s.log.Debug("Número fixo detectado (prefixo 2-5), não adicionando 9° dígito", zap.String("phone", phone))
+		} else {
+			optionWith9 := phone[:4] + "9" + afterDDD
+			candidates = append(candidates, optionWith9)
+		}
 	}
 
 	s.log.Debug("Candidatos gerados para validação", zap.String("original", phone), zap.Strings("candidates", candidates))
