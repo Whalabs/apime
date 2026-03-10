@@ -708,10 +708,14 @@ func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phon
 			} else {
 				jid, jerr := types.ParseJID(contact.JID)
 				if jerr == nil {
-					s.log.Debug("JID resolvido via banco de dados", zap.String("phone", phone), zap.String("jid", jid.String()))
-					positiveTTL := time.Duration(s.cfg.JIDCachePositiveTTLHours) * time.Hour
-					jidCache.Store(phone, jidCacheEntry{jid: jid, expiresAt: time.Now().Add(positiveTTL)})
-					return jid, nil
+					positiveDBTTL := time.Duration(s.cfg.JIDCachePositiveDBTTLDays) * 24 * time.Hour
+					if time.Since(contact.UpdatedAt) < positiveDBTTL {
+						s.log.Debug("JID resolvido via banco de dados", zap.String("phone", phone), zap.String("jid", jid.String()))
+						positiveTTL := time.Duration(s.cfg.JIDCachePositiveTTLHours) * time.Hour
+						jidCache.Store(phone, jidCacheEntry{jid: jid, expiresAt: time.Now().Add(positiveTTL)})
+						return jid, nil
+					}
+					s.log.Info("JID positivo expirado no banco, revalidando via IsOnWhatsApp", zap.String("phone", phone), zap.String("oldJid", jid.String()), zap.Duration("age", time.Since(contact.UpdatedAt)))
 				}
 			}
 		}
