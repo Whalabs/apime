@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/open-apime/apime/internal/pkg/queue"
+	messageSvc "github.com/open-apime/apime/internal/service/message"
 	"github.com/open-apime/apime/internal/storage"
 	"github.com/open-apime/apime/internal/storage/media"
 )
@@ -169,6 +170,11 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		result["messageId"] = evt.Info.ID
 		result["timestamp"] = evt.Info.Timestamp
 		result["pushName"] = evt.Info.PushName
+
+		// Track inbound messages for auto MarkRead before sending
+		if !evt.Info.IsFromMe {
+			messageSvc.TrackInbound(instanceID, chatJID, evt.Info.ID, senderJID)
+		}
 
 		if evt.Message.GetConversation() != "" {
 			result["text"] = evt.Message.GetConversation()

@@ -141,6 +141,8 @@ type SendInput struct {
 	Quoted        string
 	Participant   string
 	MentionedJids []string
+	MarkReadMessageID string
+	MarkReadSender    string
 }
 
 func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, error) {
@@ -246,10 +248,36 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 	if toJID.Server == types.DefaultUserServer || toJID.Server == types.HiddenUserServer {
 		hasSession, err := s.sessionMgr.HasSession(input.InstanceID, toJID)
 
+		// 1. Go online
 		_ = client.SendPresence(ctx, types.PresenceAvailable)
 
-		_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, types.ChatPresenceMediaText)
+		// 2. Mark as read — auto-detect from inbound tracker or use explicit param
+		markMsgID := input.MarkReadMessageID
+		markSender := input.MarkReadSender
+		if markMsgID == "" {
+			if entry, ok := popLastInbound(input.InstanceID, toJID.String()); ok {
+				markMsgID = entry.messageID
+				markSender = entry.senderJID
+			}
+		}
+		if markMsgID != "" {
+			senderJID := toJID
+			if markSender != "" {
+				if parsed, parseErr := types.ParseJID(markSender); parseErr == nil {
+					senderJID = parsed
+				}
+			}
+			_ = client.MarkRead(ctx, []types.MessageID{types.MessageID(markMsgID)}, time.Now(), toJID, senderJID, types.ReceiptTypeRead)
+			s.log.Debug("mensagem marcada como lida antes do envio",
+				zap.String("message_id", markMsgID),
+				zap.String("to", toJID.String()))
+		}
 
+		// 3. Send typing/recording presence (audio shows "recording audio...")
+		media := presenceMediaType(input.Type)
+		_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, media)
+
+		// 4. Fetch devices for crypto warmup
 		s.log.Debug("buscando dispositivos do destinatário antes do envio",
 			zap.String("instance_id", input.InstanceID),
 			zap.String("to", toJID.String()))
@@ -263,21 +291,20 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			s.log.Debug("dispositivos do destinatário atualizados",
 				zap.String("to", toJID.String()),
 				zap.Int("device_count", len(devices)))
-
-			time.Sleep(800 * time.Millisecond)
 		}
 
+		// 5. Content-based dynamic delay
+		presenceDelay := calculatePresenceDelay(input)
 		if err == nil && !hasSession {
 			s.log.Info("Nova sessão detectada...",
 				zap.String("instance_id", input.InstanceID),
 				zap.String("to", toJID.String()))
-
-			wait := 1500 + rand.Intn(1500)
-			time.Sleep(time.Duration(wait) * time.Millisecond)
-		} else {
-			wait := 500 + rand.Intn(700)
-			time.Sleep(time.Duration(wait) * time.Millisecond)
+			presenceDelay += time.Duration(1500+rand.Intn(1000)) * time.Millisecond
 		}
+		s.log.Debug("presence delay calculado",
+			zap.String("type", input.Type),
+			zap.Duration("delay", presenceDelay))
+		simulatePresenceDelay(ctx, client, toJID, media, presenceDelay)
 	}
 
 	var waMessage *waE2E.Message
@@ -531,7 +558,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			time.Sleep(backoff)
 
 			_ = client.SendPresence(ctx, types.PresenceAvailable)
-			_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, types.ChatPresenceMediaText)
+			_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, presenceMediaType(input.Type))
 
 			_, _ = client.GetUserDevices(ctx, []types.JID{toJID})
 		}
@@ -618,7 +645,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		}
 	}
 
-	_ = client.SendChatPresence(ctx, toJID, types.ChatPresencePaused, types.ChatPresenceMediaText)
+	_ = client.SendChatPresence(ctx, toJID, types.ChatPresencePaused, presenceMediaType(input.Type))
 
 	if err != nil {
 		jidCache.Delete(input.To)
@@ -652,7 +679,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		s.log.Warn("erro ao atualizar status enviado no banco", zap.Error(err))
 	}
 
-	_ = client.SendChatPresence(ctx, toJID, types.ChatPresencePaused, types.ChatPresenceMediaText)
+	_ = client.SendChatPresence(ctx, toJID, types.ChatPresencePaused, presenceMediaType(input.Type))
 
 	return msg, nil
 }
@@ -807,6 +834,121 @@ func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phon
 	}
 
 	return resolvedJID, nil
+}
+
+// simulatePresenceDelay handles the typing/recording delay with optional micro-pauses.
+// For text: breaks "typing..." into segments with brief pauses (type → pause → type → send).
+// For audio: continuous recording without pauses (humans hold the record button).
+// The initial ChatPresenceComposing must already be sent before calling this.
+func simulatePresenceDelay(ctx context.Context, client *whatsmeow.Client, toJID types.JID, media types.ChatPresenceMedia, totalDelay time.Duration) {
+	// Audio: continuous recording, no micro-pauses
+	if media == types.ChatPresenceMediaAudio || totalDelay < 3*time.Second {
+		time.Sleep(totalDelay)
+		return
+	}
+
+	// Text: micro-pauses for delays > 3s
+	numPauses := 1
+	if totalDelay > 5*time.Second {
+		numPauses = 1 + rand.Intn(2) // 1-2
+	}
+	if totalDelay > 7*time.Second {
+		numPauses = 2 + rand.Intn(2) // 2-3
+	}
+
+	// Each pause 300-700ms
+	pauseDurations := make([]time.Duration, numPauses)
+	var totalPauseTime time.Duration
+	for i := range pauseDurations {
+		p := time.Duration(300+rand.Intn(400)) * time.Millisecond
+		pauseDurations[i] = p
+		totalPauseTime += p
+	}
+
+	// Distribute remaining time across typing segments
+	typingTime := totalDelay - totalPauseTime
+	numSegments := numPauses + 1
+	avgSegment := typingTime / time.Duration(numSegments)
+
+	for i := 0; i < numSegments; i++ {
+		// Jitter ±20% per segment
+		var jitter time.Duration
+		if jitterRange := int64(avgSegment) / 5; jitterRange > 0 {
+			jitter = time.Duration(rand.Int63n(jitterRange*2+1) - jitterRange)
+		}
+		segDuration := avgSegment + jitter
+		if segDuration < 400*time.Millisecond {
+			segDuration = 400 * time.Millisecond
+		}
+
+		time.Sleep(segDuration)
+
+		if i < numPauses {
+			_ = client.SendChatPresence(ctx, toJID, types.ChatPresencePaused, media)
+			time.Sleep(pauseDurations[i])
+			_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, media)
+		}
+	}
+}
+
+func presenceMediaType(msgType string) types.ChatPresenceMedia {
+	if msgType == "audio" {
+		return types.ChatPresenceMediaAudio
+	}
+	return types.ChatPresenceMediaText
+}
+
+func calculatePresenceDelay(input SendInput) time.Duration {
+	var base int
+	switch input.Type {
+	case "text":
+		// ~40ms per char, min 1.5s, max 8s
+		base = len(input.Text) * 40
+		if base < 1500 {
+			base = 1500
+		}
+		if base > 8000 {
+			base = 8000
+		}
+	case "audio":
+		// Based on audio duration (seconds)
+		if input.Seconds > 0 {
+			base = input.Seconds * 1000
+			if base > 30000 {
+				base = 30000
+			}
+		} else {
+			base = 3000
+		}
+	case "image", "video":
+		// Base delay + size factor + caption
+		sizeMB := len(input.MediaData) / (1024 * 1024)
+		base = 2000 + sizeMB*300
+		if base > 8000 {
+			base = 8000
+		}
+		if input.Caption != "" {
+			extra := len(input.Caption) * 40
+			if extra > 5000 {
+				extra = 5000
+			}
+			base += extra
+		}
+	case "document":
+		base = 1500
+		if input.Caption != "" {
+			extra := len(input.Caption) * 40
+			if extra > 5000 {
+				extra = 5000
+			}
+			base += extra
+		}
+	default:
+		base = 1500
+	}
+	// Jitter ±10%
+	jitter := rand.Intn(base/5+1) - base/10
+	return time.Duration(base+jitter) * time.Millisecond
 }
 
 func generatePTTWaveform(seconds int) []byte {

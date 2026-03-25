@@ -83,6 +83,8 @@ type sendTextRequest struct {
 	Quoted            string   `json:"quoted"`
 	QuotedParticipant string   `json:"quotedParticipant"`
 	MentionedJids     []string `json:"mentionedJids"`
+	MarkReadMessageID string   `json:"markReadMessageId"`
+	MarkReadSender    string   `json:"markReadSender"`
 }
 
 func (h *MessageHandler) sendText(c *gin.Context) {
@@ -105,13 +107,15 @@ func (h *MessageHandler) sendText(c *gin.Context) {
 	// normalizeJID foi movido/refatorado para dentro do service
 
 	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
-		InstanceID:    instanceID,
-		To:            req.To,
-		Type:          "text",
-		Text:          req.Text,
-		Quoted:        req.Quoted,
-		Participant:   req.QuotedParticipant,
-		MentionedJids: req.MentionedJids,
+		InstanceID:        instanceID,
+		To:                req.To,
+		Type:              "text",
+		Text:              req.Text,
+		Quoted:            req.Quoted,
+		Participant:       req.QuotedParticipant,
+		MentionedJids:     req.MentionedJids,
+		MarkReadMessageID: req.MarkReadMessageID,
+		MarkReadSender:    req.MarkReadSender,
 	})
 	if err != nil {
 		if errors.Is(err, messageSvc.ErrInstanceNotConnected) {
@@ -178,15 +182,17 @@ func (h *MessageHandler) sendMedia(c *gin.Context) {
 	// Passar o JID/Phone cru para o service resolver dinamicamente via IsOnWhatsApp
 
 	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
-		InstanceID:    instanceID,
-		To:            to,
-		Type:          mediaType,
-		MediaData:     fileData,
-		MediaType:     file.Header.Get("Content-Type"),
-		Caption:       caption,
-		Quoted:        c.PostForm("quoted"),
-		Participant:   c.PostForm("quotedParticipant"),
-		MentionedJids: parseMentionedJids(c),
+		InstanceID:        instanceID,
+		To:                to,
+		Type:              mediaType,
+		MediaData:         fileData,
+		MediaType:         file.Header.Get("Content-Type"),
+		Caption:           caption,
+		Quoted:            c.PostForm("quoted"),
+		Participant:       c.PostForm("quotedParticipant"),
+		MentionedJids:     parseMentionedJids(c),
+		MarkReadMessageID: c.PostForm("markReadMessageId"),
+		MarkReadSender:    c.PostForm("markReadSender"),
 	})
 	if err != nil {
 		if errors.Is(err, messageSvc.ErrInstanceNotConnected) {
@@ -256,16 +262,18 @@ func (h *MessageHandler) sendAudio(c *gin.Context) {
 	mediaType := file.Header.Get("Content-Type")
 
 	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
-		InstanceID:    instanceID,
-		To:            to,
-		Type:          "audio",
-		MediaData:     fileData,
-		MediaType:     mediaType,
-		Seconds:       seconds,
-		PTT:           ptt,
-		Quoted:        c.PostForm("quoted"),
-		Participant:   c.PostForm("quotedParticipant"),
-		MentionedJids: parseMentionedJids(c),
+		InstanceID:        instanceID,
+		To:                to,
+		Type:              "audio",
+		MediaData:         fileData,
+		MediaType:         mediaType,
+		Seconds:           seconds,
+		PTT:               ptt,
+		Quoted:            c.PostForm("quoted"),
+		Participant:       c.PostForm("quotedParticipant"),
+		MentionedJids:     parseMentionedJids(c),
+		MarkReadMessageID: c.PostForm("markReadMessageId"),
+		MarkReadSender:    c.PostForm("markReadSender"),
 	})
 	if err != nil {
 		if errors.Is(err, messageSvc.ErrInstanceNotConnected) {
@@ -332,16 +340,18 @@ func (h *MessageHandler) sendDocument(c *gin.Context) {
 	// Passar o JID/Phone cru para o service resolver dinamicamente via IsOnWhatsApp
 
 	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
-		InstanceID:    instanceID,
-		To:            to,
-		Type:          "document",
-		MediaData:     fileData,
-		MediaType:     file.Header.Get("Content-Type"),
-		FileName:      fileName,
-		Caption:       caption,
-		Quoted:        c.PostForm("quoted"),
-		Participant:   c.PostForm("quotedParticipant"),
-		MentionedJids: parseMentionedJids(c),
+		InstanceID:        instanceID,
+		To:                to,
+		Type:              "document",
+		MediaData:         fileData,
+		MediaType:         file.Header.Get("Content-Type"),
+		FileName:          fileName,
+		Caption:           caption,
+		Quoted:            c.PostForm("quoted"),
+		Participant:       c.PostForm("quotedParticipant"),
+		MentionedJids:     parseMentionedJids(c),
+		MarkReadMessageID: c.PostForm("markReadMessageId"),
+		MarkReadSender:    c.PostForm("markReadSender"),
 	})
 	if err != nil {
 		if errors.Is(err, messageSvc.ErrInstanceNotConnected) {
