@@ -264,14 +264,23 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 					senderJID = parsed
 				}
 			}
-			if markErr := client.MarkRead(ctx, []types.MessageID{types.MessageID(markMsgID)}, time.Now(), toJID, senderJID, types.ReceiptTypeRead); markErr != nil {
-				s.log.Error("[markread] erro ao marcar como lida",
+			now := time.Now()
+			msgIDs := []types.MessageID{types.MessageID(markMsgID)}
+			// Send read receipt to sender (blue ticks)
+			if markErr := client.MarkRead(ctx, msgIDs, now, toJID, senderJID, types.ReceiptTypeRead); markErr != nil {
+				s.log.Error("[markread] erro ao enviar read receipt",
 					zap.String("message_id", markMsgID),
 					zap.String("chat", toJID.String()),
-					zap.String("sender", senderJID.String()),
 					zap.Error(markErr))
+			}
+			// Send read-self receipt to sync read state across own devices (phone)
+			if selfErr := client.MarkRead(ctx, msgIDs, now, toJID, senderJID, types.ReceiptTypeReadSelf); selfErr != nil {
+				s.log.Error("[markread] erro ao enviar read-self receipt",
+					zap.String("message_id", markMsgID),
+					zap.String("chat", toJID.String()),
+					zap.Error(selfErr))
 			} else {
-				s.log.Info("[markread] mensagem marcada como lida antes do envio",
+				s.log.Info("[markread] mensagem marcada como lida (read + read-self)",
 					zap.String("message_id", markMsgID),
 					zap.String("chat", toJID.String()),
 					zap.String("sender", senderJID.String()))
