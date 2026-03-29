@@ -40,6 +40,7 @@ func (h *MessageHandler) Register(r *gin.RouterGroup) {
 	r.POST("/instances/:id/messages/media", h.sendMedia)
 	r.POST("/instances/:id/messages/audio", h.sendAudio)
 	r.POST("/instances/:id/messages/document", h.sendDocument)
+	r.POST("/instances/:id/messages/contact", h.sendContact)
 	r.GET("/instances/:id/messages", h.list)
 }
 
@@ -355,6 +356,61 @@ func (h *MessageHandler) sendDocument(c *gin.Context) {
 	})
 	if err != nil {
 		if errors.Is(err, messageSvc.ErrInstanceNotConnected) {
+			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
+			response.Error(c, http.StatusBadRequest, err)
+		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) {
+			response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
+		} else {
+			response.Error(c, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	response.Success(c, http.StatusOK, msg)
+}
+
+type sendContactRequest struct {
+	To                string                    `json:"to" binding:"required"`
+	DisplayName       string                    `json:"displayName" binding:"required"`
+	Vcard             string                    `json:"vcard"`
+	Contacts          []messageSvc.ContactEntry `json:"contacts"`
+	Quoted            string                    `json:"quoted"`
+	QuotedParticipant string                    `json:"quotedParticipant"`
+	MentionedJids     []string                  `json:"mentionedJids"`
+}
+
+func (h *MessageHandler) sendContact(c *gin.Context) {
+	instanceID := c.Param("id")
+	if c.GetString("authType") != "instance_token" {
+		response.ErrorWithMessage(c, http.StatusForbidden, "endpoint disponível apenas com token de instância")
+		return
+	}
+	if c.GetString("instanceID") != instanceID {
+		response.ErrorWithMessage(c, http.StatusForbidden, "token inválido para esta instância")
+		return
+	}
+	var req sendContactRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, err)
+		return
+	}
+
+	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
+		InstanceID:    instanceID,
+		To:            req.To,
+		Type:          "contact",
+		DisplayName:   req.DisplayName,
+		Vcard:         req.Vcard,
+		Contacts:      req.Contacts,
+		Quoted:        req.Quoted,
+		Participant:   req.QuotedParticipant,
+		MentionedJids: req.MentionedJids,
+	})
+	if err != nil {
+		if errors.Is(err, messageSvc.ErrInvalidPayload) {
+			response.Error(c, http.StatusBadRequest, err)
+		} else if errors.Is(err, messageSvc.ErrInstanceNotConnected) {
 			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
 		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 			response.Error(c, http.StatusBadRequest, err)

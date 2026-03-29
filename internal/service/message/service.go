@@ -115,6 +115,11 @@ func (s *Service) Enqueue(ctx context.Context, input EnqueueInput) (model.Messag
 	return msg, nil
 }
 
+type ContactEntry struct {
+	DisplayName string `json:"displayName"`
+	Vcard       string `json:"vcard"`
+}
+
 type SendInput struct {
 	InstanceID string
 	To         string
@@ -132,6 +137,9 @@ type SendInput struct {
 	MentionedJids []string
 	MarkReadMessageID string
 	MarkReadSender    string
+	DisplayName string
+	Vcard       string
+	Contacts    []ContactEntry
 }
 
 func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, error) {
@@ -523,6 +531,59 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		}
 		messageType = "document"
 		payload = fmt.Sprintf("document:%s:%s", fileName, input.MediaType)
+
+	case "contact":
+		if input.Vcard == "" && len(input.Contacts) == 0 {
+			return model.Message{}, ErrInvalidPayload
+		}
+		for _, c := range input.Contacts {
+			if c.Vcard == "" {
+				return model.Message{}, fmt.Errorf("%w: campo 'vcard' é obrigatório em cada contato", ErrInvalidPayload)
+			}
+		}
+		var ctxInfo *waE2E.ContextInfo
+		if input.Quoted != "" || len(input.MentionedJids) > 0 {
+			ctxInfo = buildContextInfo(input.Quoted, input.Participant, input.MentionedJids)
+		}
+		if len(input.Contacts) > 1 {
+			contacts := make([]*waE2E.ContactMessage, len(input.Contacts))
+			for i, c := range input.Contacts {
+				contacts[i] = &waE2E.ContactMessage{
+					DisplayName: proto.String(c.DisplayName),
+					Vcard:       proto.String(c.Vcard),
+				}
+			}
+			arrMsg := &waE2E.ContactsArrayMessage{
+				DisplayName: proto.String(input.DisplayName),
+				Contacts:    contacts,
+			}
+			if ctxInfo != nil {
+				arrMsg.ContextInfo = ctxInfo
+			}
+			waMessage = &waE2E.Message{
+				ContactsArrayMessage: arrMsg,
+			}
+		} else {
+			// Contato único
+			vcard := input.Vcard
+			displayName := input.DisplayName
+			if len(input.Contacts) == 1 {
+				vcard = input.Contacts[0].Vcard
+				displayName = input.Contacts[0].DisplayName
+			}
+			contactMsg := &waE2E.ContactMessage{
+				DisplayName: proto.String(displayName),
+				Vcard:       proto.String(vcard),
+			}
+			if ctxInfo != nil {
+				contactMsg.ContextInfo = ctxInfo
+			}
+			waMessage = &waE2E.Message{
+				ContactMessage: contactMsg,
+			}
+		}
+		messageType = "contact"
+		payload = fmt.Sprintf("contact:%s", input.DisplayName)
 
 	default:
 		return model.Message{}, fmt.Errorf("%w: %s", ErrUnsupportedMediaType, input.Type)
