@@ -131,6 +131,10 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 				}
 			}
 			result["chatJID"] = chatJID
+			if evt.Info.IsGroup {
+				result["participant"] = senderJID
+				result["author"] = senderJID
+			}
 
 			result["isFromMe"] = evt.Info.IsFromMe
 			result["isGroup"] = evt.Info.IsGroup
