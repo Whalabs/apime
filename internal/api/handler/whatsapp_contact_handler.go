@@ -55,6 +55,36 @@ func (h *WhatsAppHandler) getContact(c *gin.Context) {
 		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
 		return
 	}
+
+	// Resolução LID → PN: tenta mapear JID oculto para o número real
+	// antes de buscar o contato. O mapping é populado automaticamente
+	// pelo whatsmeow (SenderAlt/RecipientAlt e GetUserInfo).
+	var inputJID *types.JID
+	if jid.Server == types.HiddenUserServer {
+		copy := jid
+		inputJID = &copy
+
+		// 1. Lookup local (rápido, sem rede)
+		if client.Store != nil && client.Store.LIDs != nil {
+			if pn, err := client.Store.LIDs.GetPNForLID(c.Request.Context(), jid); err == nil && !pn.IsEmpty() {
+				jid = pn.ToNonAD()
+			}
+		}
+
+		// 2. Se ainda é LID, força população via rede e tenta de novo
+		if jid.Server == types.HiddenUserServer {
+			if infoMap, err := client.GetUserInfo(c.Request.Context(), []types.JID{jid}); err == nil {
+				if info, ok := infoMap[jid]; ok && !info.LID.IsEmpty() {
+					if client.Store != nil && client.Store.LIDs != nil {
+						if pn, err := client.Store.LIDs.GetPNForLID(c.Request.Context(), jid); err == nil && !pn.IsEmpty() {
+							jid = pn.ToNonAD()
+						}
+					}
+				}
+			}
+		}
+	}
+
 	if client.Store == nil || client.Store.Contacts == nil {
 		response.ErrorWithMessage(c, http.StatusBadRequest, "contacts store não disponível")
 		return
@@ -64,7 +94,12 @@ func (h *WhatsAppHandler) getContact(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, err)
 		return
 	}
-	response.Success(c, http.StatusOK, gin.H{"jid": jid.String(), "contact": contact})
+
+	resp := gin.H{"jid": jid.String(), "contact": contact}
+	if inputJID != nil {
+		resp["inputJID"] = inputJID.String()
+	}
+	response.Success(c, http.StatusOK, resp)
 }
 
 func (h *WhatsAppHandler) getUserInfo(c *gin.Context) {
