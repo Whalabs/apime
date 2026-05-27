@@ -170,3 +170,35 @@ func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phon
 
 	return resolvedJID, nil
 }
+
+// ConfirmJID invalida cache negativo e persiste o mapeamento positivo a partir
+// de um evento real (mensagem, recibo, presença) que comprova que o número está no WhatsApp.
+// Aceita apenas JIDs do servidor s.whatsapp.net.
+func (s *Service) ConfirmJID(ctx context.Context, jid types.JID) {
+	if jid.Server != types.DefaultUserServer || jid.User == "" {
+		return
+	}
+	phone := jid.User
+	jidStr := jid.String()
+
+	// Fast path: cache positivo válido com mesmo JID — nada a fazer, não toca DB.
+	if val, loaded := jidCache.Load(phone); loaded {
+		if entry, ok := val.(jidCacheEntry); ok && !entry.jid.IsEmpty() && entry.jid.String() == jidStr && time.Now().Before(entry.expiresAt) {
+			return
+		}
+		if entry, ok := val.(jidCacheEntry); ok && entry.jid.IsEmpty() {
+			s.log.Info("cache negativo invalidado por evento", zap.String("phone", phone))
+		}
+		jidCache.Delete(phone)
+	}
+
+	positiveTTL := time.Duration(s.cfg.JIDCachePositiveTTLHours) * time.Hour
+	jidCache.Store(phone, jidCacheEntry{jid: jid, expiresAt: time.Now().Add(positiveTTL)})
+
+	if s.contactRepo == nil {
+		return
+	}
+	if err := s.contactRepo.Upsert(ctx, model.Contact{Phone: phone, JID: jidStr}); err != nil {
+		s.log.Warn("falha ao persistir JID confirmado por evento", zap.String("phone", phone), zap.Error(err))
+	}
+}

@@ -92,4 +92,4 @@ exclude (
 	github.com/gin-gonic/gin v1.11.0
 )
 
-replace go.mau.fi/whatsmeow => github.com/Whalabs/whatsmeow v0.0.0-20260517020343-6f35a31d094f
+replace go.mau.fi/whatsmeow => github.com/Whalabs/whatsmeow v0.0.0-20260527170146-02e74e0e99e6

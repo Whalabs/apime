@@ -102,9 +102,12 @@ func main() {
 
 	mediaHandler := handler.NewMediaHandler(mediaStorage)
 
+	logr.Debug("inicializando serviço de mensagens")
+	messageService := message.NewServiceWithSession(repos.Message, sessionManager, repos.Instance, repos.Contact, repos.EventLog, repos.OutboxQueue, cfg.WhatsApp, logr)
+
 	logr.Info("inicializando sistema de webhooks")
 	instanceWebhookChecker := &instanceCheckerAdapter{repo: repos.Instance}
-	eventHandler := webhook.NewEventHandler(repos.WebhookQueue, logr, mediaStorage, repos.Message, cfg.App.BaseURL, instanceWebhookChecker)
+	eventHandler := webhook.NewEventHandler(repos.WebhookQueue, logr, mediaStorage, repos.Message, cfg.App.BaseURL, instanceWebhookChecker, messageService)
 	sessionManager.SetEventHandler(eventHandler)
 	logr.Info("event handler configurado")
 
@@ -137,7 +140,6 @@ func main() {
 	}
 
 	logr.Debug("inicializando serviços")
-	messageService := message.NewServiceWithSession(repos.Message, sessionManager, repos.Instance, repos.Contact, repos.EventLog, repos.OutboxQueue, cfg.WhatsApp, logr)
 	outboxWorker := message.NewOutboxWorker(messageService, repos.OutboxQueue, logr, cfg.App.OutboxWorkers)
 	outboxWorker.Start(context.Background())
 	logr.Info("outbox worker iniciado", zap.Int("workers", cfg.App.OutboxWorkers))

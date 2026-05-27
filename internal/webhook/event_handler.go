@@ -23,6 +23,10 @@ type InstanceChecker interface {
 	HasWebhook(ctx context.Context, instanceID string) bool
 }
 
+type JIDConfirmer interface {
+	ConfirmJID(ctx context.Context, jid types.JID)
+}
+
 type EventHandler struct {
 	queue           queue.Queue
 	log             *zap.Logger
@@ -30,9 +34,10 @@ type EventHandler struct {
 	messageRepo     storage.MessageRepository
 	apiBaseURL      string
 	instanceChecker InstanceChecker
+	jidConfirmer    JIDConfirmer
 }
 
-func NewEventHandler(q queue.Queue, log *zap.Logger, mediaStorage *media.Storage, messageRepo storage.MessageRepository, apiBaseURL string, instanceChecker InstanceChecker) *EventHandler {
+func NewEventHandler(q queue.Queue, log *zap.Logger, mediaStorage *media.Storage, messageRepo storage.MessageRepository, apiBaseURL string, instanceChecker InstanceChecker, jidConfirmer JIDConfirmer) *EventHandler {
 	return &EventHandler{
 		queue:           q,
 		log:             log,
@@ -40,6 +45,50 @@ func NewEventHandler(q queue.Queue, log *zap.Logger, mediaStorage *media.Storage
 		messageRepo:     messageRepo,
 		apiBaseURL:      apiBaseURL,
 		instanceChecker: instanceChecker,
+		jidConfirmer:    jidConfirmer,
+	}
+}
+
+// confirmJIDFromEvent extrai o JID s.whatsapp.net do evento (resolvendo @lid via Alt)
+// e confirma no resolver, invalidando cache negativo e persistindo o mapeamento.
+func (h *EventHandler) confirmJIDFromEvent(ctx context.Context, evt any) {
+	if h.jidConfirmer == nil {
+		return
+	}
+	resolve := func(primary, alt types.JID) types.JID {
+		if primary.Server == types.DefaultUserServer && primary.User != "" {
+			return primary
+		}
+		if alt.Server == types.DefaultUserServer && alt.User != "" {
+			return alt
+		}
+		return types.EmptyJID
+	}
+	switch e := evt.(type) {
+	case *events.Message:
+		if e.Info.IsGroup {
+			return
+		}
+		jid := resolve(e.Info.Sender, e.Info.SenderAlt)
+		if jid.IsEmpty() && e.Info.IsFromMe {
+			jid = resolve(e.Info.Chat, e.Info.RecipientAlt)
+		}
+		if !jid.IsEmpty() {
+			h.jidConfirmer.ConfirmJID(ctx, jid)
+		}
+	case *events.Receipt:
+		if e.IsGroup {
+			return
+		}
+		jid := resolve(e.Sender, e.MessageSender)
+		if !jid.IsEmpty() {
+			h.jidConfirmer.ConfirmJID(ctx, jid)
+		}
+	case *events.Presence:
+		jid := resolve(e.From, types.EmptyJID)
+		if !jid.IsEmpty() {
+			h.jidConfirmer.ConfirmJID(ctx, jid)
+		}
 	}
 }
 
@@ -50,6 +99,8 @@ func (h *EventHandler) Handle(ctx context.Context, instanceID string, instanceJI
 	}
 
 	h.log.Debug("[dispatcher] processando evento para webhook", zap.String("instance", instanceID), zap.String("type", fmt.Sprintf("%T", evt)))
+
+	h.confirmJIDFromEvent(ctx, evt)
 
 	if receipt, ok := evt.(*events.Receipt); ok {
 		status := string(receipt.Type)
