@@ -695,7 +695,10 @@ func (m *Manager) RestoreSession(ctx context.Context, instanceID string, encrypt
 	}
 
 	client := whatsmeow.NewClient(deviceStore, clientLog)
+	client.EnableAutoReconnect = true
+	client.ManualHistorySyncDownload = true
 	client.AutomaticMessageRerequestFromPhone = true
+	client.GetMessageForRetry = m.getMessageForRetryCallback(instanceID)
 
 	err = client.Connect()
 	if err != nil {
