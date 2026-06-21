@@ -16,6 +16,7 @@ import (
 	"github.com/open-apime/apime/internal/config"
 	"github.com/open-apime/apime/internal/dashboard"
 	"github.com/open-apime/apime/internal/logger"
+	"github.com/open-apime/apime/internal/pkg/sentryx"
 	"github.com/open-apime/apime/internal/server"
 	"github.com/open-apime/apime/internal/service/api_token"
 	"github.com/open-apime/apime/internal/service/auth"
@@ -51,6 +52,24 @@ func main() {
 		log.Fatalf("logger: %v", err)
 	}
 	defer logr.Sync()
+
+	sentryEnv := cfg.Sentry.Environment
+	if sentryEnv == "" {
+		sentryEnv = cfg.App.Env
+	}
+	if err := sentryx.Init(sentryx.Config{
+		DSN:              cfg.Sentry.DSN,
+		Environment:      sentryEnv,
+		Release:          cfg.Sentry.Release,
+		ServerName:       cfg.Sentry.ServerName,
+		SampleRate:       cfg.Sentry.SampleRate,
+		TracesSampleRate: cfg.Sentry.TracesSampleRate,
+	}); err != nil {
+		logr.Warn("sentry: falha ao inicializar — seguindo sem reporting", zap.Error(err))
+	} else if sentryx.IsEnabled() {
+		logr.Info("sentry habilitado", zap.String("environment", sentryEnv))
+	}
+	defer sentryx.Flush(2 * time.Second)
 
 	sessionDir := filepath.Join(cfg.Storage.DataDir, "sessions")
 	mediaDir := filepath.Join(cfg.Storage.DataDir, "media")

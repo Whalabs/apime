@@ -19,6 +19,7 @@ type Config struct {
 	WhatsApp    WhatsAppConfig
 	Webhook     WebhookConfig
 	Dashboard   DashboardConfig
+	Sentry      SentryConfig
 }
 
 type StorageConfig struct {
@@ -99,6 +100,16 @@ type WebhookConfig struct {
 type DashboardConfig struct {
 	Enabled  bool   `env:"DASHBOARD_ENABLED" envDefault:"true"`
 	Timezone string `env:"DASHBOARD_TIMEZONE" envDefault:""`
+}
+
+// SentryConfig — sem DSN, integração fica desligada (no-op).
+type SentryConfig struct {
+	DSN              string  `env:"SENTRY_DSN" envDefault:""`
+	Environment      string  `env:"SENTRY_ENVIRONMENT" envDefault:""`
+	Release          string  `env:"SENTRY_RELEASE" envDefault:""`
+	ServerName       string  `env:"SENTRY_SERVER_NAME" envDefault:""`
+	SampleRate       float64 `env:"SENTRY_SAMPLE_RATE" envDefault:"1.0"`
+	TracesSampleRate float64 `env:"SENTRY_TRACES_SAMPLE_RATE" envDefault:"0.0"`
 }
 
 // Load carrega as configurações da aplicação.

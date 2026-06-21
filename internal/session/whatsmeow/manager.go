@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	"go.mau.fi/whatsmeow"
@@ -24,9 +25,12 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/open-apime/apime/internal/pkg/crypto"
+	"github.com/open-apime/apime/internal/pkg/sentryx"
 	"github.com/open-apime/apime/internal/storage"
 	"github.com/open-apime/apime/internal/storage/model"
 )
+
+const sentryLevelError = sentry.LevelError
 
 type zapLogger struct {
 	log    *zap.Logger
@@ -43,7 +47,12 @@ func (z *zapLogger) Warnf(msg string, args ...interface{}) {
 	z.log.Warn(fmt.Sprintf(msg, args...), zap.String("module", z.module))
 }
 func (z *zapLogger) Errorf(msg string, args ...interface{}) {
-	z.log.Error(fmt.Sprintf(msg, args...), zap.String("module", z.module))
+	formatted := fmt.Sprintf(msg, args...)
+	z.log.Error(formatted, zap.String("module", z.module))
+	sentryx.CaptureMessage(formatted, sentryLevelError, map[string]string{
+		"source": "whatsmeow",
+		"module": z.module,
+	})
 }
 func (z *zapLogger) Sub(module string) waLog.Logger {
 	return &zapLogger{log: z.log, module: module}

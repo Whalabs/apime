@@ -4,11 +4,13 @@ import (
 	"html/template"
 	"time"
 
+	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
 	"github.com/open-apime/apime/internal/api/handler"
 	"github.com/open-apime/apime/internal/api/middleware"
+	"github.com/open-apime/apime/internal/pkg/sentryx"
 	api_token "github.com/open-apime/apime/internal/service/api_token"
 	"github.com/open-apime/apime/internal/storage"
 	"github.com/open-apime/apime/internal/webhook"
@@ -41,6 +43,11 @@ func NewRouter(opts Options) *gin.Engine {
 		router.SetHTMLTemplate(opts.HTMLTemplate)
 	}
 	router.Use(gin.Recovery())
+	if sentryx.IsEnabled() {
+		// Repanic=true: deixa o gin.Recovery acima absorver após o capture.
+		router.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
+		router.Use(middleware.SentryReport())
+	}
 	router.Use(middleware.RequestID())
 	router.Use(cors.New(cors.Config{
 		AllowOrigins: []string{"*"},
