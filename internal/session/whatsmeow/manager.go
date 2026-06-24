@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,6 +33,27 @@ import (
 
 const sentryLevelError = sentry.LevelError
 
+// reconexão normal de websocket do WhatsApp (auto-recuperada pela whatsmeow).
+// A lib loga esses casos como Error, mas são esperados e não são incidentes —
+// rebaixamos para Debug e não reportamos ao Sentry para não poluir.
+var expectedReconnectNoise = []string{
+	"failed to read frame header",
+	"error reading from websocket",
+	"websocket not connected",
+	"autoreconnect",
+	"keepalive timeout",
+}
+
+func isExpectedReconnectNoise(msg string) bool {
+	m := strings.ToLower(msg)
+	for _, p := range expectedReconnectNoise {
+		if strings.Contains(m, p) {
+			return true
+		}
+	}
+	return false
+}
+
 type zapLogger struct {
 	log    *zap.Logger
 	module string
@@ -48,6 +70,11 @@ func (z *zapLogger) Warnf(msg string, args ...interface{}) {
 }
 func (z *zapLogger) Errorf(msg string, args ...interface{}) {
 	formatted := fmt.Sprintf(msg, args...)
+	// Ruído de reconexão esperada: rebaixa para Debug e não reporta ao Sentry.
+	if isExpectedReconnectNoise(formatted) {
+		z.log.Debug(formatted, zap.String("module", z.module))
+		return
+	}
 	z.log.Error(formatted, zap.String("module", z.module))
 	sentryx.CaptureMessage(formatted, sentryLevelError, map[string]string{
 		"source": "whatsmeow",

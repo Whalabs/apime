@@ -488,6 +488,15 @@ func (h *InstanceHandler) getProfilePicture(c *gin.Context) {
 		response.Success(c, http.StatusOK, nil)
 		return
 	}
+	// Instância instável (socket caído, reconectando, IQ sem resposta) não é erro
+	// de servidor — a foto não está disponível neste momento. Respondemos 200 com
+	// null (mesmo tratamento de "sem foto"); o consumidor re-busca no próximo ciclo
+	// quando a instância reconectar. Evita poluir o Sentry com 5xx.
+	if errors.Is(err, whatsmeow.ErrNotConnected) || errors.Is(err, whatsmeow.ErrNotLoggedIn) ||
+		errors.Is(err, whatsmeow.ErrClientIsNil) || errors.Is(err, whatsmeow.ErrIQTimedOut) {
+		response.Success(c, http.StatusOK, nil)
+		return
+	}
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err)
 		return
