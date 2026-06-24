@@ -1545,6 +1545,26 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 
 			go func() {
 				ctx := context.Background()
+
+				// Em grupo, receipt.Chat é o JID do grupo (@g.us), que NÃO é uma sessão
+				// Signal 1:1: resetar sessão/identidade pelo JID do grupo corrompe o estado
+				// de criptografia do grupo (sender keys) e faz parar de receber mensagens
+				// dos demais membros. O alvo correto do reset é o participante (receipt.Sender).
+				if receipt.Chat.Server == types.GroupServer {
+					if receipt.Sender.IsEmpty() {
+						m.log.Warn("retry receipt em grupo sem sender identificável - ignorando reset para não corromper sender keys do grupo",
+							zap.String("instance_id", instanceID),
+							zap.String("chat", receipt.Chat.String()))
+						return
+					}
+					m.log.Info("retry receipt em grupo - acionando reset apenas do participante (não do grupo)",
+						zap.String("instance_id", instanceID),
+						zap.String("chat", receipt.Chat.String()),
+						zap.String("sender", receipt.Sender.String()))
+					_ = m.ResetContactSession(ctx, instanceID, receipt.Sender.String())
+					return
+				}
+
 				m.log.Info("Acionando reset completo (sessão + identidade) devido a retry receipt",
 					zap.String("instance_id", instanceID),
 					zap.String("chat", receipt.Chat.String()))
@@ -1934,6 +1954,17 @@ func (m *Manager) ResetContactSession(ctx context.Context, instanceID, jidStr st
 	jid, err := types.ParseJID(jidStr)
 	if err != nil {
 		return err
+	}
+
+	// Guard: JID de grupo (@g.us) não possui sessão/identidade Signal 1:1.
+	// Apagá-las via SignalAddress() do grupo corrompe as sender keys e quebra o
+	// recebimento de mensagens dos demais membros. Reset de grupo deve mirar o participante.
+	if jid.Server == types.GroupServer {
+		m.log.Warn("reset de sessão ignorado: JID de grupo não tem sessão Signal 1:1",
+			zap.String("instance_id", instanceID),
+			zap.String("target_jid", jidStr),
+		)
+		return nil
 	}
 
 	err = client.Store.Sessions.DeleteSession(ctx, jid.SignalAddress().String())
