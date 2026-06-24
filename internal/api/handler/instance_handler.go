@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -481,11 +482,18 @@ func (h *InstanceHandler) getProfilePicture(c *gin.Context) {
 	}
 
 	pictureInfo, err := client.GetProfilePictureInfo(c.Request.Context(), jid, nil)
+	// Casos benignos: contato sem foto ou que escondeu a foto não são erro de
+	// servidor — respondemos 200 com null em vez de 500.
+	if errors.Is(err, whatsmeow.ErrProfilePictureNotSet) || errors.Is(err, whatsmeow.ErrProfilePictureUnauthorized) {
+		response.Success(c, http.StatusOK, nil)
+		return
+	}
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err)
 		return
 	}
 
+	// Sem erro, mas a lib pode retornar nil quando não há foto.
 	response.Success(c, http.StatusOK, pictureInfo)
 }
 
