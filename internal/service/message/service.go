@@ -733,7 +733,18 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		isDisconnectedErr := strings.Contains(err.Error(), "not logged in") ||
 			strings.Contains(err.Error(), "device JID")
 
-		if !isDisconnectedErr && !strings.Contains(err.Error(), "connection") {
+		// Falha de transporte/sessão (socket caído, sem conexão, timeout) NÃO prova
+		// que o número não existe no WhatsApp — só o IsOnWhatsApp prova isso.
+		// Persistir negativo aqui envenena o cache do banco e bloqueia reenvios
+		// legítimos até o TTL expirar. Só grava negativo em erro não-transitório.
+		errMsg := err.Error()
+		isTransientErr := isDisconnectedErr ||
+			strings.Contains(errMsg, "connection") ||
+			strings.Contains(errMsg, "not connected") ||
+			strings.Contains(errMsg, "websocket") ||
+			strings.Contains(errMsg, "timeout")
+
+		if !isTransientErr {
 			if s.contactRepo != nil {
 				_ = s.contactRepo.Upsert(ctx, model.Contact{
 					Phone: input.To,
