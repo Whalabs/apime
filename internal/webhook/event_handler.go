@@ -400,6 +400,27 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 	case *events.LoggedOut:
 		result["type"] = "disconnected"
 		result["reason"] = evt.Reason.String()
+	case *events.NotifyAccountReachoutTimelock:
+		// Notificação AUTORITATIVA do servidor sobre a trava de reach-out (a causa do erro 463).
+		// É a fonte exata do estado da restrição — dispensa chutar duração (não é "sempre 7 dias"):
+		//   IsActive=true  → restrição vigente; TimeEnforcementEnds = quando expira (data exata).
+		//   IsActive=false → restrição saiu → o consumidor devolve a conexão para "conectado".
+		// Complementa o 463 síncrono do envio (message/service.go), que é só o gatilho imediato.
+		if evt.IsActive {
+			result["type"] = "temporary_ban"
+			result["reason"] = "account reachout timelock"
+			result["code"] = 463
+		} else {
+			result["type"] = "restriction_lifted"
+		}
+		result["active"] = evt.IsActive
+		if evt.EnforcementType != "" {
+			result["enforcementType"] = evt.EnforcementType
+		}
+		if !evt.TimeEnforcementEnds.IsZero() {
+			// RFC3339 no JSON do webhook → o consumidor faz new Date(restrictedUntil).
+			result["restrictedUntil"] = evt.TimeEnforcementEnds.Time
+		}
 	default:
 		result["type"] = "unknown"
 		result["eventType"] = fmt.Sprintf("%T", evt)
