@@ -1566,7 +1566,11 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 	if handler != nil {
 
 		switch evt.(type) {
-		case *events.Message, *events.Receipt, *events.Presence:
+		case *events.Message, *events.Receipt, *events.Presence,
+			*events.UndecryptableMessage, *events.ChatPresence:
+			// UndecryptableMessage cobre view-once (stub sem mídia) e sessão dessincronizada;
+			// ChatPresence é o indicador "digitando…". Sem estes no encaminhamento, o
+			// normalizeEvent que os trata seria código morto.
 			go handler.Handle(context.Background(), instanceID, instanceJID, client, evt)
 		}
 	}

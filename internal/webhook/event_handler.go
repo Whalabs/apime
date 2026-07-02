@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	"go.uber.org/zap"
@@ -282,6 +283,26 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 					h.log.Warn("falha ao baixar vídeo, enviando webhook sem URL", zap.String("msg_id", evt.Info.ID))
 				}
 			}
+		} else if ptv := evt.Message.GetPtvMessage(); ptv != nil {
+			// Recado de vídeo (video note redondo). No protocolo é um VideoMessage no campo
+			// ptvMessage → baixa igual a vídeo. Marcamos isPtv p/ o consumidor diferenciar na UI.
+			h.log.Info("detectado vídeo em recado (PTV), iniciando processamento", zap.String("msg_id", evt.Info.ID))
+			result["mediaType"] = "video"
+			result["isPtv"] = true
+			if ptv.GetCaption() != "" {
+				result["caption"] = ptv.GetCaption()
+			}
+			result["mimetype"] = ptv.GetMimetype()
+			result["fileSize"] = ptv.GetFileLength()
+			result["duration"] = ptv.GetSeconds()
+
+			if client != nil && h.mediaStorage != nil {
+				if mediaURL := h.downloadAndSaveMedia(ctx, instanceID, evt.Info.ID, client, ptv, ptv.GetMimetype()); mediaURL != "" {
+					result["mediaUrl"] = mediaURL
+				} else {
+					h.log.Warn("falha ao baixar vídeo em recado (PTV), enviando webhook sem URL", zap.String("msg_id", evt.Info.ID))
+				}
+			}
 		} else if doc := evt.Message.GetDocumentMessage(); doc != nil {
 			result["mediaType"] = "document"
 			if doc.GetTitle() != "" {
@@ -342,6 +363,34 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		if len(mentionedJids) > 0 {
 			result["mentionedJids"] = mentionedJids
 		}
+
+		// Edição de mensagem no protocolo novo: chega criptografada como secretEncryptedMessage
+		// (SecretEncType=MESSAGE_EDIT), não mais como protocolMessage type 14. Decriptamos com o
+		// message secret guardado e expomos o conteúdo novo + o id da mensagem original para o
+		// consumidor aplicar a edição. Sem isso a edição some (o consumidor a trata como sync).
+		if sec := evt.Message.GetSecretEncryptedMessage(); sec != nil &&
+			sec.GetSecretEncType() == waE2E.SecretEncryptedMessage_MESSAGE_EDIT {
+			if client != nil {
+				if decrypted, err := client.DecryptSecretEncryptedMessage(ctx, evt); err == nil {
+					newText := decrypted.GetConversation()
+					if newText == "" {
+						newText = decrypted.GetExtendedTextMessage().GetText()
+					}
+					if targetKey := sec.GetTargetMessageKey(); targetKey != nil {
+						result["editedMessageId"] = targetKey.GetID()
+					}
+					if newText != "" {
+						result["editedText"] = newText
+						h.log.Info("edição de mensagem decriptada",
+							zap.String("msg_id", evt.Info.ID),
+							zap.String("target", result["editedMessageId"].(string)))
+					}
+				} else {
+					h.log.Warn("falha ao decriptar edição (secretEncryptedMessage)",
+						zap.String("msg_id", evt.Info.ID), zap.Error(err))
+				}
+			}
+		}
 	case *events.Receipt:
 		result["type"] = "receipt"
 		result["messageIds"] = evt.MessageIDs
@@ -392,7 +441,25 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		result["messageId"] = evt.Info.ID
 		result["timestamp"] = evt.Info.Timestamp
 		result["pushName"] = evt.Info.PushName
-		result["text"] = "Mensagem indisponível"
+		// Visualização única: o servidor entrega só um stub (a mídia não vem a dispositivos
+		// vinculados, por privacidade — igual ao WhatsApp Web "veja no celular"). Diferenciamos
+		// pelo UnavailableType para o consumidor mostrar o aviso certo em vez de "indisponível".
+		if evt.UnavailableType == events.UnavailableTypeViewOnce {
+			result["unavailableType"] = "view_once"
+			result["text"] = "🔒 Mensagem de visualização única — abra no celular"
+		} else {
+			result["text"] = "Mensagem indisponível"
+		}
+	case *events.ChatPresence:
+		// Indicador "digitando…" / "gravando áudio". Emitido pelo WhatsApp quando o contato
+		// está compondo. Efêmero — o consumidor decide exibir e por quanto tempo.
+		result["type"] = "chat_presence"
+		result["from"] = evt.Sender.String()
+		result["chatJID"] = evt.Chat.String()
+		result["state"] = string(evt.State) // "composing" | "paused"
+		if evt.Media != "" {
+			result["media"] = string(evt.Media) // "" (texto) | "audio"
+		}
 	case *events.Connected:
 		result["type"] = "connected"
 	case *events.Disconnected:
