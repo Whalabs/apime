@@ -145,13 +145,21 @@ func (h *InstanceHandler) update(c *gin.Context) {
 		return
 	}
 
+	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
+
+	// Mesma convenção do dashboard (dashboard.go updateInstance): dono = userID; admin usa "admin".
+	// Antes passava userRole (vazio na API) como OwnerUserID → "not found" p/ qualquer usuário.
+	callerID := userID
+	if userRole == "admin" {
+		callerID = "admin"
+	}
 
 	inst, err := h.service.UpdateByUser(c.Request.Context(), id, instanceSvc.UpdateInput{
 		Name:          req.Name,
 		WebhookURL:    req.WebhookURL,
 		WebhookSecret: req.WebhookSecret,
-		OwnerUserID:   userRole,
+		OwnerUserID:   callerID,
 	})
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err)
