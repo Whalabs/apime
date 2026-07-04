@@ -9,6 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/open-apime/apime/internal/api/handler"
+	instancehandler "github.com/open-apime/apime/internal/api/handler/instance"
+	whatsapphandler "github.com/open-apime/apime/internal/api/handler/whatsapp"
 	"github.com/open-apime/apime/internal/api/middleware"
 	"github.com/open-apime/apime/internal/pkg/sentryx"
 	api_token "github.com/open-apime/apime/internal/service/api_token"
@@ -20,9 +22,9 @@ type Options struct {
 	Env             string
 	AuthSecret      string
 	HTMLTemplate    *template.Template
-	InstanceHandler *handler.InstanceHandler
+	InstanceHandler *instancehandler.Handler
 	MessageHandler  *handler.MessageHandler
-	WhatsAppHandler *handler.WhatsAppHandler
+	WhatsAppHandler *whatsapphandler.Handler
 	AuthHandler     *handler.AuthHandler
 	APITokenHandler *handler.APITokenHandler
 	HealthHandler   *handler.HealthHandler

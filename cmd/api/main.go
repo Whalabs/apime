@@ -11,6 +11,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/open-apime/apime/internal/api/handler"
+	instancehandler "github.com/open-apime/apime/internal/api/handler/instance"
+	whatsapphandler "github.com/open-apime/apime/internal/api/handler/whatsapp"
 	"github.com/open-apime/apime/internal/api/middleware"
 	"github.com/open-apime/apime/internal/app"
 	"github.com/open-apime/apime/internal/config"
@@ -167,9 +169,9 @@ func main() {
 	authService := auth.NewService(cfg.JWT.Secret, cfg.JWT.ExpHours, repos.User)
 	logr.Debug("serviços inicializados")
 
-	instanceHandler := handler.NewInstanceHandlerWithSession(instanceService, logr, sessionManager)
+	instanceHandler := instancehandler.NewHandlerWithSession(instanceService, logr, sessionManager)
 	messageHandler := handler.NewMessageHandler(messageService)
-	whatsAppHandler := handler.NewWhatsAppHandler(sessionManager, messageService)
+	whatsAppHandler := whatsapphandler.NewHandler(sessionManager, messageService)
 	authHandler := handler.NewAuthHandler(authService)
 	apiTokenHandler := handler.NewAPITokenHandler(apiTokenService)
 	userHandler := handler.NewUserHandler(userService)

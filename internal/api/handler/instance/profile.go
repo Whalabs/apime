@@ -1,4 +1,4 @@
-package handler
+package instance
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/open-apime/apime/internal/storage/model"
 )
 
-func (h *InstanceHandler) getInstanceInfo(c *gin.Context) {
+func (h *Handler) getInstanceInfo(c *gin.Context) {
 	instanceID := c.Param("id")
 	if c.GetString("authType") != "instance_token" {
 		response.ErrorWithMessage(c, http.StatusForbidden, "endpoint disponível apenas com token de instância")
@@ -96,7 +96,7 @@ func (h *InstanceHandler) getInstanceInfo(c *gin.Context) {
 	response.Success(c, http.StatusOK, responseData)
 }
 
-func (h *InstanceHandler) getProfile(c *gin.Context) {
+func (h *Handler) getProfile(c *gin.Context) {
 	instanceID := c.Param("id")
 	jidStr := c.Param("jid")
 	if c.GetString("authType") != "instance_token" {
@@ -140,7 +140,7 @@ func (h *InstanceHandler) getProfile(c *gin.Context) {
 	response.Success(c, http.StatusOK, userInfo)
 }
 
-func (h *InstanceHandler) getBusinessProfile(c *gin.Context) {
+func (h *Handler) getBusinessProfile(c *gin.Context) {
 	instanceID := c.Param("id")
 	jidStr := c.Param("jid")
 	if c.GetString("authType") != "instance_token" {
@@ -178,7 +178,7 @@ func (h *InstanceHandler) getBusinessProfile(c *gin.Context) {
 	response.Success(c, http.StatusOK, businessProfile)
 }
 
-func (h *InstanceHandler) getProfilePicture(c *gin.Context) {
+func (h *Handler) getProfilePicture(c *gin.Context) {
 	instanceID := c.Param("id")
 	jidStr := c.Param("jid")
 	if c.GetString("authType") != "instance_token" {

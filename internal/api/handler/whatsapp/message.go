@@ -1,4 +1,4 @@
-package handler
+package whatsapp
 
 import (
 	"errors"
@@ -20,7 +20,7 @@ type checkIsWhatsAppRequest struct {
 	Phone string `json:"phone" binding:"required"`
 }
 
-func (h *WhatsAppHandler) checkIsWhatsApp(c *gin.Context) {
+func (h *Handler) checkIsWhatsApp(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -73,7 +73,7 @@ type markReadRequest struct {
 	Played    bool   `json:"played"`
 }
 
-func (h *WhatsAppHandler) markRead(c *gin.Context) {
+func (h *Handler) markRead(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -132,7 +132,7 @@ type deleteForEveryoneRequest struct {
 	Sender    string `json:"sender"`
 }
 
-func (h *WhatsAppHandler) deleteForEveryone(c *gin.Context) {
+func (h *Handler) deleteForEveryone(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -196,7 +196,7 @@ type editMessageRequest struct {
 	Text      string `json:"text" binding:"required"`
 }
 
-func (h *WhatsAppHandler) editMessage(c *gin.Context) {
+func (h *Handler) editMessage(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -249,7 +249,7 @@ type sendReactionRequest struct {
 	FromMe    *bool  `json:"from_me"`
 }
 
-func (h *WhatsAppHandler) sendReaction(c *gin.Context) {
+func (h *Handler) sendReaction(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return

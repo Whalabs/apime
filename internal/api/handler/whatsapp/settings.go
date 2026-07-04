@@ -1,4 +1,4 @@
-package handler
+package whatsapp
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"github.com/open-apime/apime/internal/pkg/response"
 )
 
-func (h *WhatsAppHandler) getStatusPrivacy(c *gin.Context) {
+func (h *Handler) getStatusPrivacy(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -30,7 +30,7 @@ func (h *WhatsAppHandler) getStatusPrivacy(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"lists": privacy})
 }
 
-func (h *WhatsAppHandler) getPrivacySettings(c *gin.Context) {
+func (h *Handler) getPrivacySettings(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -49,7 +49,7 @@ type setPrivacySettingRequest struct {
 	Value string `json:"value" binding:"required"`
 }
 
-func (h *WhatsAppHandler) setPrivacySetting(c *gin.Context) {
+func (h *Handler) setPrivacySetting(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -83,7 +83,7 @@ type setStatusMessageRequest struct {
 	Message string `json:"message" binding:"required"`
 }
 
-func (h *WhatsAppHandler) setStatusMessage(c *gin.Context) {
+func (h *Handler) setStatusMessage(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -109,7 +109,7 @@ type setDefaultDisappearingTimerRequest struct {
 	Seconds int `json:"seconds" binding:"required,min=0"`
 }
 
-func (h *WhatsAppHandler) setDefaultDisappearingTimer(c *gin.Context) {
+func (h *Handler) setDefaultDisappearingTimer(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -131,7 +131,7 @@ func (h *WhatsAppHandler) setDefaultDisappearingTimer(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"status": "ok"})
 }
 
-func (h *WhatsAppHandler) getChatSettings(c *gin.Context) {
+func (h *Handler) getChatSettings(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -170,7 +170,7 @@ type setChatSettingsRequest struct {
 	Archived   *bool      `json:"archived"`
 }
 
-func (h *WhatsAppHandler) setChatSettings(c *gin.Context) {
+func (h *Handler) setChatSettings(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return

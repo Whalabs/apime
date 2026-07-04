@@ -1,4 +1,4 @@
-package handler
+package whatsapp
 
 import (
 	"net/http"
@@ -16,7 +16,7 @@ type createGroupRequest struct {
 	Participants []string `json:"participants"`
 }
 
-func (h *WhatsAppHandler) createGroup(c *gin.Context) {
+func (h *Handler) createGroup(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -65,7 +65,7 @@ type updateGroupParticipantsRequest struct {
 	Participants []string `json:"participants" binding:"required"`
 }
 
-func (h *WhatsAppHandler) updateGroupParticipants(c *gin.Context) {
+func (h *Handler) updateGroupParticipants(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -132,7 +132,7 @@ func (h *WhatsAppHandler) updateGroupParticipants(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"participants": res})
 }
 
-func (h *WhatsAppHandler) listGroupJoinRequests(c *gin.Context) {
+func (h *Handler) listGroupJoinRequests(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -166,7 +166,7 @@ type updateGroupJoinRequestsRequest struct {
 	Participants []string `json:"participants" binding:"required"`
 }
 
-func (h *WhatsAppHandler) updateGroupJoinRequests(c *gin.Context) {
+func (h *Handler) updateGroupJoinRequests(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -229,7 +229,7 @@ func (h *WhatsAppHandler) updateGroupJoinRequests(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"participants": res})
 }
 
-func (h *WhatsAppHandler) getGroupInfo(c *gin.Context) {
+func (h *Handler) getGroupInfo(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -258,7 +258,7 @@ func (h *WhatsAppHandler) getGroupInfo(c *gin.Context) {
 	response.Success(c, http.StatusOK, info)
 }
 
-func (h *WhatsAppHandler) getGroupInviteLink(c *gin.Context) {
+func (h *Handler) getGroupInviteLink(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -292,7 +292,7 @@ type getGroupInfoFromLinkRequest struct {
 	Link string `json:"link" binding:"required"`
 }
 
-func (h *WhatsAppHandler) getGroupInfoFromLink(c *gin.Context) {
+func (h *Handler) getGroupInfoFromLink(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -319,7 +319,7 @@ type joinGroupWithLinkRequest struct {
 	Link string `json:"link" binding:"required"`
 }
 
-func (h *WhatsAppHandler) joinGroupWithLink(c *gin.Context) {
+func (h *Handler) joinGroupWithLink(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -342,7 +342,7 @@ func (h *WhatsAppHandler) joinGroupWithLink(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"group": jid.String()})
 }
 
-func (h *WhatsAppHandler) leaveGroup(c *gin.Context) {
+func (h *Handler) leaveGroup(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -370,7 +370,7 @@ func (h *WhatsAppHandler) leaveGroup(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"status": "ok"})
 }
 
-func (h *WhatsAppHandler) listGroups(c *gin.Context) {
+func (h *Handler) listGroups(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return

@@ -1,4 +1,4 @@
-package handler
+package whatsapp
 
 import (
 	"net/http"
@@ -11,7 +11,7 @@ import (
 	"github.com/open-apime/apime/internal/pkg/response"
 )
 
-func (h *WhatsAppHandler) newsletterSubscribeLiveUpdates(c *gin.Context) {
+func (h *Handler) newsletterSubscribeLiveUpdates(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -39,7 +39,7 @@ type newsletterMarkViewedRequest struct {
 	ServerIDs []string `json:"server_ids" binding:"required"`
 }
 
-func (h *WhatsAppHandler) newsletterMarkViewed(c *gin.Context) {
+func (h *Handler) newsletterMarkViewed(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -86,7 +86,7 @@ type newsletterSendReactionRequest struct {
 	MessageID string `json:"message_id"`
 }
 
-func (h *WhatsAppHandler) newsletterSendReaction(c *gin.Context) {
+func (h *Handler) newsletterSendReaction(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -130,7 +130,7 @@ func (h *WhatsAppHandler) newsletterSendReaction(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"status": "ok"})
 }
 
-func (h *WhatsAppHandler) getNewsletterMessageUpdates(c *gin.Context) {
+func (h *Handler) getNewsletterMessageUpdates(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return

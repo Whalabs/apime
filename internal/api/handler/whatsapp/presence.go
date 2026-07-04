@@ -1,4 +1,4 @@
-package handler
+package whatsapp
 
 import (
 	"encoding/base64"
@@ -17,7 +17,7 @@ type setPresenceRequest struct {
 	State string `json:"state" binding:"required"`
 }
 
-func (h *WhatsAppHandler) setPresence(c *gin.Context) {
+func (h *Handler) setPresence(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -95,7 +95,7 @@ type uploadMediaRequest struct {
 	DataBase64 string `json:"data_base64" binding:"required"`
 }
 
-func (h *WhatsAppHandler) uploadMedia(c *gin.Context) {
+func (h *Handler) uploadMedia(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return

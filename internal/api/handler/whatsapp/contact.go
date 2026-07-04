@@ -1,4 +1,4 @@
-package handler
+package whatsapp
 
 import (
 	"net/http"
@@ -10,7 +10,7 @@ import (
 	"github.com/open-apime/apime/internal/pkg/response"
 )
 
-func (h *WhatsAppHandler) listContacts(c *gin.Context) {
+func (h *Handler) listContacts(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -33,7 +33,7 @@ func (h *WhatsAppHandler) listContacts(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"contacts": contacts})
 }
 
-func (h *WhatsAppHandler) getContact(c *gin.Context) {
+func (h *Handler) getContact(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -102,7 +102,7 @@ func (h *WhatsAppHandler) getContact(c *gin.Context) {
 	response.Success(c, http.StatusOK, resp)
 }
 
-func (h *WhatsAppHandler) getUserInfo(c *gin.Context) {
+func (h *Handler) getUserInfo(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -141,7 +141,7 @@ type getContactQRLinkRequest struct {
 	Revoke bool `json:"revoke"`
 }
 
-func (h *WhatsAppHandler) getContactQRLink(c *gin.Context) {
+func (h *Handler) getContactQRLink(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -171,7 +171,7 @@ type resolveContactQRLinkRequest struct {
 	Code string `json:"code" binding:"required"`
 }
 
-func (h *WhatsAppHandler) resolveContactQRLink(c *gin.Context) {
+func (h *Handler) resolveContactQRLink(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return
@@ -198,7 +198,7 @@ type resolveBusinessMessageLinkRequest struct {
 	Code string `json:"code" binding:"required"`
 }
 
-func (h *WhatsAppHandler) resolveBusinessMessageLink(c *gin.Context) {
+func (h *Handler) resolveBusinessMessageLink(c *gin.Context) {
 	instanceID, ok := h.requireInstanceToken(c)
 	if !ok {
 		return

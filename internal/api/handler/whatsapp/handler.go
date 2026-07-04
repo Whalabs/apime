@@ -1,4 +1,4 @@
-package handler
+package whatsapp
 
 import (
 	"net/http"
@@ -10,23 +10,23 @@ import (
 	messageSvc "github.com/open-apime/apime/internal/service/message"
 )
 
-type WhatsAppHandler struct {
-	sessionManager WhatsAppSessionManager
+type Handler struct {
+	sessionManager SessionManager
 	messageService *messageSvc.Service
 }
 
-type WhatsAppSessionManager interface {
+type SessionManager interface {
 	GetClient(instanceID string) (*whatsmeow.Client, error)
 }
 
-func NewWhatsAppHandler(sessionManager WhatsAppSessionManager, messageService *messageSvc.Service) *WhatsAppHandler {
-	return &WhatsAppHandler{
+func NewHandler(sessionManager SessionManager, messageService *messageSvc.Service) *Handler {
+	return &Handler{
 		sessionManager: sessionManager,
 		messageService: messageService,
 	}
 }
 
-func (h *WhatsAppHandler) Register(r *gin.RouterGroup) {
+func (h *Handler) Register(r *gin.RouterGroup) {
 	r.POST("/instances/:id/whatsapp/check", h.checkIsWhatsApp)
 	r.POST("/instances/:id/whatsapp/presence", h.setPresence)
 	r.POST("/instances/:id/whatsapp/messages/read", h.markRead)
@@ -63,7 +63,7 @@ func (h *WhatsAppHandler) Register(r *gin.RouterGroup) {
 	r.POST("/instances/:id/whatsapp/upload", h.uploadMedia)
 }
 
-func (h *WhatsAppHandler) requireInstanceToken(c *gin.Context) (string, bool) {
+func (h *Handler) requireInstanceToken(c *gin.Context) (string, bool) {
 	instanceID := c.Param("id")
 	if c.GetString("authType") != "instance_token" {
 		response.ErrorWithMessage(c, http.StatusForbidden, "endpoint disponível apenas com token de instância")

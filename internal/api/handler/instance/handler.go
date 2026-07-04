@@ -1,4 +1,4 @@
-package handler
+package instance
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 	instanceSvc "github.com/open-apime/apime/internal/service/instance"
 )
 
-type InstanceHandler struct {
+type Handler struct {
 	service        *instanceSvc.Service
 	log            *zap.Logger
 	sessionManager SessionManager
@@ -23,19 +23,19 @@ type SessionManager interface {
 	GetClient(instanceID string) (*whatsmeow.Client, error)
 }
 
-func NewInstanceHandler(service *instanceSvc.Service, log *zap.Logger) *InstanceHandler {
-	return &InstanceHandler{service: service, log: log}
+func NewHandler(service *instanceSvc.Service, log *zap.Logger) *Handler {
+	return &Handler{service: service, log: log}
 }
 
-func NewInstanceHandlerWithSession(service *instanceSvc.Service, log *zap.Logger, sessionManager SessionManager) *InstanceHandler {
-	return &InstanceHandler{
+func NewHandlerWithSession(service *instanceSvc.Service, log *zap.Logger, sessionManager SessionManager) *Handler {
+	return &Handler{
 		service:        service,
 		log:            log,
 		sessionManager: sessionManager,
 	}
 }
 
-func (h *InstanceHandler) Register(r *gin.RouterGroup) {
+func (h *Handler) Register(r *gin.RouterGroup) {
 	r.GET("/instances", h.list)
 	r.GET("/instances/:id", h.get)
 	r.POST("/instances", h.create)
@@ -63,7 +63,7 @@ type updateInstanceRequest struct {
 	WebhookSecret string `json:"webhook_secret"`
 }
 
-func (h *InstanceHandler) create(c *gin.Context) {
+func (h *Handler) create(c *gin.Context) {
 	if c.GetString("authType") == "instance_token" {
 		response.ErrorWithMessage(c, http.StatusForbidden, "token de instância não pode criar instâncias")
 		return
@@ -89,7 +89,7 @@ func (h *InstanceHandler) create(c *gin.Context) {
 	response.Success(c, http.StatusCreated, instance)
 }
 
-func (h *InstanceHandler) list(c *gin.Context) {
+func (h *Handler) list(c *gin.Context) {
 	if c.GetString("authType") == "instance_token" {
 		response.ErrorWithMessage(c, http.StatusForbidden, "token de instância não pode listar instâncias")
 		return
@@ -107,7 +107,7 @@ func (h *InstanceHandler) list(c *gin.Context) {
 	response.Success(c, http.StatusOK, instances)
 }
 
-func (h *InstanceHandler) get(c *gin.Context) {
+func (h *Handler) get(c *gin.Context) {
 	id := c.Param("id")
 	if c.GetString("authType") == "instance_token" {
 		if c.GetString("instanceID") != id {
@@ -127,7 +127,7 @@ func (h *InstanceHandler) get(c *gin.Context) {
 	response.Success(c, http.StatusOK, instance)
 }
 
-func (h *InstanceHandler) update(c *gin.Context) {
+func (h *Handler) update(c *gin.Context) {
 	id := c.Param("id")
 	if c.GetString("authType") == "instance_token" {
 		response.ErrorWithMessage(c, http.StatusForbidden, "endpoint disponível apenas com token de usuário")
@@ -162,7 +162,7 @@ func (h *InstanceHandler) update(c *gin.Context) {
 	response.Success(c, http.StatusOK, inst)
 }
 
-func (h *InstanceHandler) delete(c *gin.Context) {
+func (h *Handler) delete(c *gin.Context) {
 	id := c.Param("id")
 	if c.GetString("authType") == "instance_token" {
 		response.ErrorWithMessage(c, http.StatusForbidden, "endpoint disponível apenas com token de usuário")
@@ -179,7 +179,7 @@ func (h *InstanceHandler) delete(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"message": "instância removida"})
 }
 
-func (h *InstanceHandler) rotateToken(c *gin.Context) {
+func (h *Handler) rotateToken(c *gin.Context) {
 	id := c.Param("id")
 	if c.GetString("authType") == "instance_token" {
 		response.ErrorWithMessage(c, http.StatusForbidden, "endpoint disponível apenas com token de usuário")
@@ -196,7 +196,7 @@ func (h *InstanceHandler) rotateToken(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"token": plain})
 }
 
-func (h *InstanceHandler) getQR(c *gin.Context) {
+func (h *Handler) getQR(c *gin.Context) {
 	id := c.Param("id")
 	h.log.Info("solicitando QR code", zap.String("instance_id", id))
 
@@ -266,7 +266,7 @@ func getErrorType(err error) string {
 	return "internal_error"
 }
 
-func (h *InstanceHandler) disconnect(c *gin.Context) {
+func (h *Handler) disconnect(c *gin.Context) {
 	id := c.Param("id")
 
 	if c.GetString("authType") == "instance_token" {
@@ -292,7 +292,7 @@ func (h *InstanceHandler) disconnect(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"message": "instância desconectada"})
 }
 
-func (h *InstanceHandler) listEvents(c *gin.Context) {
+func (h *Handler) listEvents(c *gin.Context) {
 	instanceID := c.Param("id")
 	if instanceID == "" {
 		response.Error(c, http.StatusBadRequest, fmt.Errorf("id é obrigatório"))
