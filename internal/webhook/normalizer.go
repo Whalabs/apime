@@ -246,6 +246,92 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			}
 		}
 
+		if tmpl := evt.Message.GetTemplateMessage(); tmpl != nil {
+			if ht := tmpl.GetHydratedTemplate(); ht != nil {
+				inter := map[string]interface{}{"kind": "buttons"}
+				if ht.GetHydratedContentText() != "" {
+					inter["text"] = ht.GetHydratedContentText()
+					result["text"] = ht.GetHydratedContentText()
+				}
+				if ht.GetHydratedFooterText() != "" {
+					inter["footer"] = ht.GetHydratedFooterText()
+				}
+				btns := []map[string]interface{}{}
+				for _, b := range ht.GetHydratedButtons() {
+					if q := b.GetQuickReplyButton(); q != nil {
+						btns = append(btns, map[string]interface{}{"id": q.GetID(), "label": q.GetDisplayText(), "type": "reply"})
+					} else if u := b.GetUrlButton(); u != nil {
+						btns = append(btns, map[string]interface{}{"id": u.GetURL(), "label": u.GetDisplayText(), "type": "url", "url": u.GetURL()})
+					} else if cb := b.GetCallButton(); cb != nil {
+						btns = append(btns, map[string]interface{}{"id": cb.GetPhoneNumber(), "label": cb.GetDisplayText(), "type": "call", "phone": cb.GetPhoneNumber()})
+					}
+				}
+				inter["buttons"] = btns
+				result["interactive"] = inter
+			}
+		} else if bm := evt.Message.GetButtonsMessage(); bm != nil {
+			inter := map[string]interface{}{"kind": "buttons"}
+			if bm.GetContentText() != "" {
+				inter["text"] = bm.GetContentText()
+				result["text"] = bm.GetContentText()
+			}
+			if bm.GetFooterText() != "" {
+				inter["footer"] = bm.GetFooterText()
+			}
+			btns := []map[string]interface{}{}
+			for _, b := range bm.GetButtons() {
+				btns = append(btns, map[string]interface{}{"id": b.GetButtonID(), "label": b.GetButtonText().GetDisplayText(), "type": "reply"})
+			}
+			inter["buttons"] = btns
+			result["interactive"] = inter
+		} else if lm := evt.Message.GetListMessage(); lm != nil {
+			inter := map[string]interface{}{"kind": "list"}
+			if lm.GetDescription() != "" {
+				inter["text"] = lm.GetDescription()
+				result["text"] = lm.GetDescription()
+			}
+			if lm.GetFooterText() != "" {
+				inter["footer"] = lm.GetFooterText()
+			}
+			secs := []map[string]interface{}{}
+			for _, s := range lm.GetSections() {
+				rows := []map[string]interface{}{}
+				for _, r := range s.GetRows() {
+					rows = append(rows, map[string]interface{}{"id": r.GetRowID(), "label": r.GetTitle(), "description": r.GetDescription()})
+				}
+				secs = append(secs, map[string]interface{}{"title": s.GetTitle(), "rows": rows})
+			}
+			inter["sections"] = secs
+			result["interactive"] = inter
+		}
+
+		// --- Respostas do usuário ao clicar num botão/linha (recebimento) ---
+		if br := evt.Message.GetButtonsResponseMessage(); br != nil {
+			if br.GetSelectedDisplayText() != "" {
+				result["text"] = br.GetSelectedDisplayText()
+			}
+			result["interactiveReply"] = map[string]interface{}{"selectedId": br.GetSelectedButtonID(), "selectedLabel": br.GetSelectedDisplayText()}
+		} else if lr := evt.Message.GetListResponseMessage(); lr != nil {
+			if sr := lr.GetSingleSelectReply(); sr != nil {
+				if lr.GetTitle() != "" {
+					result["text"] = lr.GetTitle()
+				}
+				result["interactiveReply"] = map[string]interface{}{"selectedId": sr.GetSelectedRowID(), "selectedLabel": lr.GetTitle()}
+			}
+		} else if tr := evt.Message.GetTemplateButtonReplyMessage(); tr != nil {
+			if tr.GetSelectedDisplayText() != "" {
+				result["text"] = tr.GetSelectedDisplayText()
+			}
+			result["interactiveReply"] = map[string]interface{}{"selectedId": tr.GetSelectedID(), "selectedLabel": tr.GetSelectedDisplayText()}
+		} else if ir := evt.Message.GetInteractiveResponseMessage(); ir != nil {
+			if body := ir.GetBody(); body != nil && body.GetText() != "" {
+				result["text"] = body.GetText()
+			}
+			if nf := ir.GetNativeFlowResponseMessage(); nf != nil {
+				result["interactiveReply"] = map[string]interface{}{"name": nf.GetName(), "paramsJson": nf.GetParamsJSON()}
+			}
+		}
+
 		var mentionedJids []string
 		if extText := evt.Message.GetExtendedTextMessage(); extText != nil && extText.GetContextInfo() != nil {
 			mentionedJids = extText.GetContextInfo().GetMentionedJID()
