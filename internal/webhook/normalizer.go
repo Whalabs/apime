@@ -130,7 +130,10 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		result["messageId"] = evt.Info.ID
 		result["timestamp"] = evt.Info.Timestamp
 		result["pushName"] = evt.Info.PushName
-
+		if vn := evt.Info.VerifiedName; vn != nil && vn.Details != nil {
+			result["verifiedName"] = vn.Details.GetVerifiedName()
+			result["issuer"] = vn.Details.GetIssuer()
+		}
 		// Track inbound messages for auto MarkRead before sending
 		if !evt.Info.IsFromMe {
 			messageSvc.TrackInbound(instanceID, chatJID, evt.Info.ID, senderJID)
