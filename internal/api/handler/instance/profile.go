@@ -207,6 +207,11 @@ func (h *Handler) getProfilePicture(c *gin.Context) {
 		return
 	}
 
+	if pictureNegHit(jid.String()) {
+		response.Success(c, http.StatusOK, nil)
+		return
+	}
+
 	pictureInfo, err := client.GetProfilePictureInfo(c.Request.Context(), jid, nil)
 	// Benign cases: a contact with no picture or who hid their picture is not a
 	// server error — respond 200 with null instead of 500.
@@ -236,12 +241,11 @@ func (h *Handler) getProfilePicture(c *gin.Context) {
 		response.Success(c, http.StatusOK, nil)
 		return
 	}
-	// bad-request (400) means the queried JID is invalid/non-existent from the
-	// WhatsApp server's point of view (e.g. malformed number, synthetic JID).
-	// It's a caller input error, not a server failure: respond 400 with the
-	// message instead of 500. Ideally the caller stops querying invalid JIDs.
+	// bad-request (400) means the WhatsApp server rejected this JID for picture
+	// queries (e.g. device part :NN, synthetic JID). Cache it and respond 200 null.
 	if errors.Is(err, whatsmeow.ErrIQBadRequest) {
-		response.Error(c, http.StatusBadRequest, fmt.Errorf("JID inválido para consulta de foto: %s", jidStr))
+		pictureNegStore(jid.String())
+		response.Success(c, http.StatusOK, nil)
 		return
 	}
 	if err != nil {

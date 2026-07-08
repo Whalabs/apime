@@ -89,7 +89,7 @@ type LogConfig struct {
 type WhatsAppConfig struct {
 	SessionKeyEnc             string `env:"WHATSAPP_SESSION_KEY_ENC" envDefault:"apime-session-key-change-in-production"`
 	JIDCachePositiveTTLHours  int    `env:"WHATSAPP_JID_CACHE_POSITIVE_TTL_HOURS" envDefault:"24"`
-	JIDCacheNegativeTTLDays   int    `env:"WHATSAPP_JID_CACHE_NEGATIVE_TTL_DAYS" envDefault:"1"`
+	JIDCacheNegativeTTLDays   int    `env:"WHATSAPP_JID_CACHE_NEGATIVE_TTL_DAYS" envDefault:"7"`
 	JIDCachePositiveDBTTLDays int    `env:"WHATSAPP_JID_CACHE_POSITIVE_DB_TTL_DAYS" envDefault:"15"`
 }
 

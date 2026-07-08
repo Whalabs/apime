@@ -12,6 +12,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/open-apime/apime/internal/pkg/instancelock"
 	"github.com/open-apime/apime/internal/pkg/response"
 	messageSvc "github.com/open-apime/apime/internal/service/message"
 )
@@ -46,6 +47,9 @@ func (h *Handler) checkIsWhatsApp(c *gin.Context) {
 		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
 		return
 	}
+
+	unlock := instancelock.Acquire(instanceID)
+	defer unlock()
 
 	jid, err := h.messageService.ResolveJID(c.Request.Context(), client, phone)
 
@@ -173,6 +177,10 @@ func (h *Handler) deleteForEveryone(c *gin.Context) {
 		}
 	}
 
+	unlock := instancelock.Acquire(instanceID)
+	defer unlock()
+	humanPause()
+
 	resp, err := client.RevokeMessage(c.Request.Context(), chatJID, types.MessageID(req.MessageID))
 	if err != nil {
 		msg := client.BuildRevoke(chatJID, senderJID, types.MessageID(req.MessageID))
@@ -223,6 +231,10 @@ func (h *Handler) editMessage(c *gin.Context) {
 		response.ErrorWithMessage(c, http.StatusBadRequest, "chat inválido")
 		return
 	}
+
+	unlock := instancelock.Acquire(instanceID)
+	defer unlock()
+	humanPause()
 
 	editMsg := client.BuildEdit(chatJID, types.MessageID(req.MessageID), &waE2E.Message{
 		Conversation: proto.String(req.Text),
@@ -303,6 +315,10 @@ func (h *Handler) sendReaction(c *gin.Context) {
 			SenderTimestampMS: proto.Int64(time.Now().UnixMilli()),
 		},
 	}
+
+	unlock := instancelock.Acquire(instanceID)
+	defer unlock()
+	humanPause()
 
 	resp, err := client.SendMessage(c.Request.Context(), chatJID, waMessage)
 	if err != nil {

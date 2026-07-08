@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/open-apime/apime/internal/pkg/instancelock"
 	"github.com/open-apime/apime/internal/pkg/queue"
 	"github.com/open-apime/apime/internal/storage/model"
 )
@@ -57,6 +58,9 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 	if input.InstanceID == "" || input.To == "" {
 		return model.Message{}, ErrInvalidPayload
 	}
+
+	unlock := instancelock.Acquire(input.InstanceID)
+	defer unlock()
 
 	instance, err := s.instanceRepo.GetByID(ctx, input.InstanceID)
 	if err != nil {
@@ -203,6 +207,10 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 					zap.String("chat", toJID.String()),
 					zap.String("sender", senderJID.String()))
 			}
+		}
+
+		if markMsgID != "" {
+			time.Sleep(time.Duration(300+rand.Intn(900)) * time.Millisecond)
 		}
 
 		// 3. Send typing/recording presence (audio shows "recording audio...")

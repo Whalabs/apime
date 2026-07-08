@@ -191,7 +191,7 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 				t.Stop()
 			}
 
-			timer := time.AfterFunc(5*time.Second, func() {
+			timer := time.AfterFunc(disconnectDebounceDelay, func() {
 				m.mu.Lock()
 				delete(m.disconnectDebounce, instanceID)
 				m.mu.Unlock()
@@ -268,6 +268,7 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 		))
 
 		m.updateInstanceStatus(instanceID, model.InstanceStatusError)
+		m.cooldownInstance(instanceID, v.Expire)
 		if callback != nil {
 			callback(instanceID, "error")
 		}
@@ -282,6 +283,9 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 			v.Reason.String(), v.Message,
 		))
 		m.updateInstanceStatus(instanceID, model.InstanceStatusError)
+		if v.Reason == events.ConnectFailureTempBanned {
+			m.cooldownInstance(instanceID, 0)
+		}
 		if callback != nil {
 			callback(instanceID, "error")
 		}
@@ -424,4 +428,56 @@ func (m *Manager) logConnectionEvent(instanceID, eventType, payload string) {
 			)
 		}
 	}()
+}
+
+const defaultCooldown = 30 * time.Minute
+
+// disconnectDebounceDelay is how long to wait before treating a dropped socket
+// as a real disconnect. The WhatsApp server closes idle connections and the
+// companion reconnects within ~20-24s, so a short window would report those idle
+// cycles as spurious disconnects.
+const disconnectDebounceDelay = 30 * time.Second
+
+// cooldownInstance suspends the instance connection during a temporary
+// restriction and brings it back after the given period (or defaultCooldown
+// when unknown).
+func (m *Manager) cooldownInstance(instanceID string, expire time.Duration) {
+	m.mu.RLock()
+	client, ok := m.clients[instanceID]
+	m.mu.RUnlock()
+	if !ok || client == nil {
+		return
+	}
+
+	pausa := expire
+	if pausa <= 0 {
+		pausa = defaultCooldown
+	}
+
+	client.EnableAutoReconnect = false
+	client.Disconnect()
+	m.log.Warn("instância em cooldown por restrição temporária — auto-reconnect desligado",
+		zap.String("instance_id", instanceID),
+		zap.Duration("religar_em", pausa),
+	)
+
+	time.AfterFunc(pausa, func() {
+		m.mu.RLock()
+		cur, ok := m.clients[instanceID]
+		m.mu.RUnlock()
+		if !ok || cur != client {
+			return
+		}
+		client.EnableAutoReconnect = true
+		if err := client.Connect(); err != nil {
+			m.log.Warn("falha ao reconectar após cooldown",
+				zap.String("instance_id", instanceID),
+				zap.Error(err),
+			)
+			return
+		}
+		m.log.Info("instância religada após cooldown",
+			zap.String("instance_id", instanceID),
+		)
+	})
 }
