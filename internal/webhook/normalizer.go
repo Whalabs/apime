@@ -137,6 +137,8 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		// Track inbound messages for auto MarkRead before sending
 		if !evt.Info.IsFromMe {
 			messageSvc.TrackInbound(instanceID, chatJID, evt.Info.ID, senderJID)
+			// Contact replied on this connection → release its reach-out (463) block.
+			messageSvc.ReleaseReachoutOnInbound(instanceID, chatJID)
 			h.log.Info("[markread] inbound tracked",
 				zap.String("key", instanceID+":"+chatJID),
 				zap.String("msg_id", evt.Info.ID),

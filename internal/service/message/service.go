@@ -22,6 +22,9 @@ var (
 	ErrInvalidJID           = errors.New("JID inválido")
 	ErrUnsupportedMediaType = errors.New("tipo de mídia não suportado")
 	ErrSessionUnavailable   = errors.New("sessão indisponível")
+	// ErrContactReachoutLocked: the contact recently returned 463 (reach-out timelock) on this
+	// connection and hasn't replied yet. Terminal send failure — released on the contact's inbound.
+	ErrContactReachoutLocked = errors.New("contato com restrição de reach-out (463); aguardando o contato iniciar conversa")
 )
 
 type Service struct {

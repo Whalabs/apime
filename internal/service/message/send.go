@@ -156,6 +156,32 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 	// Ensure the recipient is in the account's contact list before sending (best-effort, non-blocking).
 	s.autoSaveContact(ctx, input.InstanceID, client, toJID, input.DisplayName)
 
+	// Reach-out (463) guard: if this contact already refused via this connection and hasn't
+	// replied, skip the send instead of triggering another 463 that feeds the 403-logout. Only
+	// individual contacts (groups/broadcast/newsletter have no per-contact tctoken).
+	if toJID.Server == types.DefaultUserServer || toJID.Server == types.HiddenUserServer {
+		contactKey := normalizeChatKey(toJID.String())
+		if reachoutBlocked(input.InstanceID, contactKey) {
+			s.log.Warn("envio bloqueado por restrição de reach-out (463) — contato frio não respondeu",
+				zap.String("instance_id", input.InstanceID),
+				zap.String("to", toJID.String()))
+			// Terminal failure: mark an already-persisted (queued) message as failed so
+			// runStuckRecovery (which re-queues status='queued') doesn't loop. Direct sends have
+			// no MessageID and nothing persisted yet, so just return the error.
+			if input.MessageID != "" {
+				_ = s.repo.Update(ctx, model.Message{
+					ID:         input.MessageID,
+					InstanceID: input.InstanceID,
+					To:         input.To,
+					Type:       input.Type,
+					Payload:    input.Text,
+					Status:     "failed",
+				})
+			}
+			return model.Message{}, ErrContactReachoutLocked
+		}
+	}
+
 	if toJID.Server == types.DefaultUserServer || toJID.Server == types.HiddenUserServer {
 		hasSession, err := s.sessionMgr.HasSession(input.InstanceID, toJID)
 
@@ -615,40 +641,41 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		}
 
 		if strings.Contains(err.Error(), "error 463") {
-			s.log.Warn("WhatsApp restrito (error 463), abortando retentativas",
+			// Synchronous 463 is a per-contact reach-out timelock (missing tctoken), NOT an account
+			// ban — the account ban arrives via NotifyAccountReachoutTimelock / 403-logout. Block the
+			// contact, stop retrying, and emit a contact-scoped event without flagging the connection.
+			s.log.Warn("restrição de reach-out (463) neste contato, abortando retentativas",
 				zap.String("instance_id", input.InstanceID),
 				zap.String("to", toJID.String()))
+			reachoutStore(input.InstanceID, normalizeChatKey(toJID.String()))
 			if s.eventLogRepo != nil {
 				go func() {
 					evtCtx, evtCancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer evtCancel()
-					payload := `{"message":"WhatsApp restrito (error 463)","reason":"server returned error 463","detail":"Conta possivelmente restrita ou banida pelo WhatsApp"}`
+					payload := `{"message":"Restrição de reach-out (463) neste contato","reason":"server returned error 463","detail":"Contato frio sem tctoken; aguardando o contato iniciar conversa"}`
 					_, _ = s.eventLogRepo.Create(evtCtx, model.EventLog{
 						InstanceID: input.InstanceID,
-						Type:       "temporary_ban",
+						Type:       "contact_reachout_locked",
 						Payload:    payload,
 					})
 				}()
 			}
-			// Push the event as a webhook so the consumer can proactively reflect the restriction
-			// in the connection status — mirroring the Meta-ban pattern — without relying on the
-			// consumer inspecting the synchronous send error.
 			if s.webhookQueue != nil {
 				evt := queue.Event{
 					ID:         uuid.NewString(),
 					InstanceID: input.InstanceID,
-					Type:       "temporary_ban",
+					Type:       "contact_reachout_locked",
 					Payload: map[string]interface{}{
-						"type":   "temporary_ban",
+						"type":   "contact_reachout_locked",
 						"reason": "server returned error 463",
-						"detail": "Conta possivelmente restrita ou banida pelo WhatsApp",
+						"detail": "Contato frio sem tctoken; aguardando o contato iniciar conversa",
 						"to":     toJID.String(),
 						"code":   463,
 					},
 					CreatedAt: time.Now(),
 				}
 				if enqErr := s.webhookQueue.Enqueue(ctx, evt); enqErr != nil {
-					s.log.Warn("falha ao enfileirar webhook temporary_ban", zap.Error(enqErr))
+					s.log.Warn("falha ao enfileirar webhook contact_reachout_locked", zap.Error(enqErr))
 				}
 			}
 			break
