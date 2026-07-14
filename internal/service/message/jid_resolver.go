@@ -18,6 +18,16 @@ import (
 
 var jidCache sync.Map
 
+func resolveIsOnWhatsAppJID(item types.IsOnWhatsAppResponse) types.JID {
+	if item.JID.Server == types.DefaultUserServer && item.JID.User != "" {
+		return item.JID
+	}
+	if item.PhoneNumber.Server == types.DefaultUserServer && item.PhoneNumber.User != "" {
+		return item.PhoneNumber
+	}
+	return types.EmptyJID
+}
+
 type jidCacheEntry struct {
 	jid       types.JID
 	expiresAt time.Time
@@ -104,9 +114,11 @@ func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phon
 
 	resolvedJID := types.EmptyJID
 	for _, item := range resp {
-		if item.IsIn && item.JID.User != "" {
-			resolvedJID = item.JID
-			break
+		if item.IsIn {
+			if jid := resolveIsOnWhatsAppJID(item); !jid.IsEmpty() {
+				resolvedJID = jid
+				break
+			}
 		}
 	}
 
@@ -135,9 +147,11 @@ func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phon
 				s.log.Warn("falha ao consultar variante", zap.String("variant", variant), zap.Error(err2))
 			} else {
 				for _, item := range resp2 {
-					if item.IsIn && item.JID.User != "" {
-						resolvedJID = item.JID
-						break
+					if item.IsIn {
+						if jid := resolveIsOnWhatsAppJID(item); !jid.IsEmpty() {
+							resolvedJID = jid
+							break
+						}
 					}
 				}
 			}
