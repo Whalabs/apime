@@ -44,6 +44,18 @@ func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phon
 		return types.ParseJID(phone)
 	}
 
+	// WhatsApp username-only / LID contact (2026): the destination is a LID (<num>@lid,
+	// HiddenUserServer). There is no phone to resolve or validate via IsOnWhatsApp — the
+	// LID is itself the routing key. whatsmeow SendMessage delivers DMs to hidden-user
+	// JIDs, so address it directly.
+	if strings.Contains(phone, "@lid") {
+		jid, err := types.ParseJID(phone)
+		if err != nil {
+			return types.EmptyJID, fmt.Errorf("%w: LID inválido: %v", ErrInvalidJID, err)
+		}
+		return jid.ToNonAD(), nil
+	}
+
 	if !strings.Contains(phone, "@") {
 		phone = strings.Map(func(r rune) rune {
 			if r >= '0' && r <= '9' {

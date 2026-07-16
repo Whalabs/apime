@@ -125,6 +125,15 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		}
 		result["chatJID"] = chatJID
 		result["to"] = chatJID
+		result["addressingMode"] = string(evt.Info.AddressingMode)
+		// When the identity is a LID with no reachable phone (username-only contact),
+		// expose the raw LID as a first-class field so consumers key on it instead of
+		// sniffing "@lid" out of `from`/`chatJID`. The @username is enriched separately
+		// (Contact event / send-time IsOnWhatsApp) — never via a per-message usync query,
+		// which would add ban surface.
+		if strings.Contains(chatJID, "@lid") {
+			result["lid"] = chatJID
+		}
 		result["isFromMe"] = evt.Info.IsFromMe
 		result["isGroup"] = evt.Info.IsGroup
 		result["messageId"] = evt.Info.ID
