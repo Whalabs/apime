@@ -29,9 +29,10 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 
 		switch evt.(type) {
 		case *events.Message, *events.Receipt, *events.Presence,
-			*events.UndecryptableMessage, *events.ChatPresence:
+			*events.UndecryptableMessage, *events.ChatPresence, *events.Contact:
 			// UndecryptableMessage covers view-once (stub without media) and desynced sessions;
-			// ChatPresence is the "typing…" indicator. Without forwarding these, the
+			// ChatPresence is the "typing…" indicator; Contact carries the appstate contact
+			// sync (incl. the WhatsApp @username, 2026). Without forwarding these, the
 			// normalizeEvent that handles them would be dead code.
 			go handler.Handle(context.Background(), instanceID, instanceJID, client, evt)
 		}

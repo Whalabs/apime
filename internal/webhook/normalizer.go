@@ -502,6 +502,24 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			// RFC3339 in the webhook JSON → the consumer does new Date(restrictedUntil).
 			result["restrictedUntil"] = evt.TimeEnforcementEnds.Time
 		}
+	case *events.Contact:
+		// Appstate contact sync. Carries the WhatsApp @username (2026) for saved/synced
+		// contacts — FREE (no server query, zero ban surface). We only emit when a username
+		// is present; otherwise "ignore" so a full sync of contacts without usernames does
+		// not flood the webhook. The consumer matches by the LID/jid and stores the username.
+		username := evt.Action.GetUsername()
+		if username == "" {
+			result["type"] = "ignore"
+			return result
+		}
+		result["type"] = "contact_update"
+		result["jid"] = evt.JID.String()
+		if evt.JID.Server == types.HiddenUserServer {
+			result["lid"] = evt.JID.String()
+		}
+		result["username"] = username
+		result["fromFullSync"] = evt.FromFullSync
+		result["timestamp"] = evt.Timestamp
 	default:
 		result["type"] = "unknown"
 		result["eventType"] = fmt.Sprintf("%T", evt)
