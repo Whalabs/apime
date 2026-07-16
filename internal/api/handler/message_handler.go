@@ -126,6 +126,8 @@ func (h *MessageHandler) sendText(c *gin.Context) {
 			response.Error(c, http.StatusBadRequest, err)
 		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) {
 			response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
+		} else if errors.Is(err, messageSvc.ErrContactReachoutLocked) {
+			response.Error(c, http.StatusUnprocessableEntity, err)
 		} else {
 			response.Error(c, http.StatusInternalServerError, err)
 		}
@@ -199,6 +201,8 @@ func (h *MessageHandler) sendMedia(c *gin.Context) {
 			response.Error(c, http.StatusBadRequest, err)
 		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) {
 			response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
+		} else if errors.Is(err, messageSvc.ErrContactReachoutLocked) {
+			response.Error(c, http.StatusUnprocessableEntity, err)
 		} else {
 			response.Error(c, http.StatusInternalServerError, err)
 		}
@@ -274,6 +278,8 @@ func (h *MessageHandler) sendAudio(c *gin.Context) {
 			response.Error(c, http.StatusBadRequest, err)
 		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) {
 			response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
+		} else if errors.Is(err, messageSvc.ErrContactReachoutLocked) {
+			response.Error(c, http.StatusUnprocessableEntity, err)
 		} else {
 			response.Error(c, http.StatusInternalServerError, err)
 		}
@@ -347,6 +353,8 @@ func (h *MessageHandler) sendDocument(c *gin.Context) {
 			response.Error(c, http.StatusBadRequest, err)
 		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) {
 			response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
+		} else if errors.Is(err, messageSvc.ErrContactReachoutLocked) {
+			response.Error(c, http.StatusUnprocessableEntity, err)
 		} else {
 			response.Error(c, http.StatusInternalServerError, err)
 		}
@@ -404,6 +412,8 @@ func (h *MessageHandler) sendContact(c *gin.Context) {
 			response.Error(c, http.StatusBadRequest, err)
 		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) {
 			response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
+		} else if errors.Is(err, messageSvc.ErrContactReachoutLocked) {
+			response.Error(c, http.StatusUnprocessableEntity, err)
 		} else {
 			response.Error(c, http.StatusInternalServerError, err)
 		}

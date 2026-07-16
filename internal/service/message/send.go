@@ -583,6 +583,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 
 	var resp whatsmeow.SendResponse
 	maxRetries := 3
+	reachoutLocked := false
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
@@ -644,6 +645,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			// Synchronous 463 is a per-contact reach-out timelock (missing tctoken), NOT an account
 			// ban — the account ban arrives via NotifyAccountReachoutTimelock / 403-logout. Block the
 			// contact, stop retrying, and emit a contact-scoped event without flagging the connection.
+			reachoutLocked = true
 			s.log.Warn("restrição de reach-out (463) neste contato, abortando retentativas",
 				zap.String("instance_id", input.InstanceID),
 				zap.String("to", toJID.String()))
@@ -751,6 +753,11 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 
 		if strings.Contains(err.Error(), "device JID") || strings.Contains(err.Error(), "not logged in") {
 			return msg, fmt.Errorf("Desconectado")
+		}
+
+		// Reach-out (463)
+		if reachoutLocked {
+			return msg, ErrContactReachoutLocked
 		}
 
 		return msg, fmt.Errorf("erro ao enviar mensagem após %d tentativas: %w", maxRetries, err)
