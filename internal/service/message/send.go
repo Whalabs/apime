@@ -48,6 +48,10 @@ type SendInput struct {
 	DisplayName       string
 	Vcard             string
 	Contacts          []ContactEntry
+	Latitude          float64
+	Longitude         float64
+	LocationName      string
+	Address           string
 }
 
 func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, error) {
@@ -545,6 +549,24 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		}
 		messageType = "contact"
 		payload = fmt.Sprintf("contact:%s", input.DisplayName)
+
+	case "location":
+		locMsg := &waE2E.LocationMessage{
+			DegreesLatitude:  proto.Float64(input.Latitude),
+			DegreesLongitude: proto.Float64(input.Longitude),
+		}
+		if input.LocationName != "" {
+			locMsg.Name = proto.String(input.LocationName)
+		}
+		if input.Address != "" {
+			locMsg.Address = proto.String(input.Address)
+		}
+		if input.Quoted != "" || len(input.MentionedJids) > 0 {
+			locMsg.ContextInfo = buildContextInfo(input.Quoted, input.Participant, input.MentionedJids)
+		}
+		waMessage = &waE2E.Message{LocationMessage: locMsg}
+		messageType = "location"
+		payload = fmt.Sprintf("location:%f,%f", input.Latitude, input.Longitude)
 
 	default:
 		return model.Message{}, fmt.Errorf("%w: %s", ErrUnsupportedMediaType, input.Type)

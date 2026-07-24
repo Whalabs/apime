@@ -41,6 +41,7 @@ func (h *MessageHandler) Register(r *gin.RouterGroup) {
 	r.POST("/instances/:id/messages/audio", h.sendAudio)
 	r.POST("/instances/:id/messages/document", h.sendDocument)
 	r.POST("/instances/:id/messages/contact", h.sendContact)
+	r.POST("/instances/:id/messages/location", h.sendLocation)
 	r.GET("/instances/:id/messages", h.list)
 }
 
@@ -398,6 +399,67 @@ func (h *MessageHandler) sendContact(c *gin.Context) {
 		DisplayName:   req.DisplayName,
 		Vcard:         req.Vcard,
 		Contacts:      req.Contacts,
+		Quoted:        req.Quoted,
+		Participant:   req.QuotedParticipant,
+		QuotedText:    req.QuotedText,
+		MentionedJids: req.MentionedJids,
+	})
+	if err != nil {
+		if errors.Is(err, messageSvc.ErrInvalidPayload) {
+			response.Error(c, http.StatusBadRequest, err)
+		} else if errors.Is(err, messageSvc.ErrInstanceNotConnected) {
+			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
+			response.Error(c, http.StatusBadRequest, err)
+		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) {
+			response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
+		} else if errors.Is(err, messageSvc.ErrContactReachoutLocked) {
+			response.Error(c, http.StatusUnprocessableEntity, err)
+		} else {
+			response.Error(c, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	response.Success(c, http.StatusOK, msg)
+}
+
+type sendLocationRequest struct {
+	To                string   `json:"to" binding:"required"`
+	Latitude          *float64 `json:"latitude" binding:"required"`
+	Longitude         *float64 `json:"longitude" binding:"required"`
+	Name              string   `json:"name"`
+	Address           string   `json:"address"`
+	Quoted            string   `json:"quoted"`
+	QuotedParticipant string   `json:"quotedParticipant"`
+	QuotedText        string   `json:"quotedText"`
+	MentionedJids     []string `json:"mentionedJids"`
+}
+
+func (h *MessageHandler) sendLocation(c *gin.Context) {
+	instanceID := c.Param("id")
+	if c.GetString("authType") != "instance_token" {
+		response.ErrorWithMessage(c, http.StatusForbidden, "endpoint disponível apenas com token de instância")
+		return
+	}
+	if c.GetString("instanceID") != instanceID {
+		response.ErrorWithMessage(c, http.StatusForbidden, "token inválido para esta instância")
+		return
+	}
+	var req sendLocationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, err)
+		return
+	}
+
+	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
+		InstanceID:    instanceID,
+		To:            req.To,
+		Type:          "location",
+		Latitude:      *req.Latitude,
+		Longitude:     *req.Longitude,
+		LocationName:  req.Name,
+		Address:       req.Address,
 		Quoted:        req.Quoted,
 		Participant:   req.QuotedParticipant,
 		QuotedText:    req.QuotedText,
