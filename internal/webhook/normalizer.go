@@ -59,6 +59,45 @@ func (h *EventHandler) confirmJIDFromEvent(ctx context.Context, evt any) {
 	}
 }
 
+// resolvePNFromStore consulta o mapa LID→PN persistido localmente pelo whatsmeow
+// (tabela whatsmeow_lid_map, SQLite da sessão). É o fallback para quando o evento
+// chega sem SenderAlt/RecipientAlt — caso típico do retry de mensagem indecifrável,
+// que reentrega endereçada por LID e sem o par. Consulta local: zero superfície de ban.
+func (h *EventHandler) resolvePNFromStore(ctx context.Context, client *whatsmeow.Client, lid types.JID) types.JID {
+	if client == nil || client.Store == nil || client.Store.LIDs == nil {
+		return types.EmptyJID
+	}
+	if lid.Server != types.HiddenUserServer || lid.User == "" {
+		return types.EmptyJID
+	}
+	pn, err := client.Store.LIDs.GetPNForLID(ctx, lid.ToNonAD())
+	if err != nil || pn.IsEmpty() || pn.Server != types.DefaultUserServer {
+		return types.EmptyJID
+	}
+	return pn
+}
+
+// lidForEvent devolve o LID do contato da conversa, esteja ele no Chat/Sender
+// (endereçamento por LID) ou no Alt (endereçamento por PN). Emitido SEMPRE que
+// conhecido — mesmo quando o PN foi resolvido — para que o consumidor possa
+// unificar o contato pela identidade estável e não só pelo telefone.
+func lidForEvent(info *types.MessageInfo) types.JID {
+	if info.Chat.Server == types.HiddenUserServer {
+		return info.Chat.ToNonAD()
+	}
+	if info.Sender.Server == types.HiddenUserServer {
+		return info.Sender.ToNonAD()
+	}
+	if info.IsFromMe {
+		if info.RecipientAlt.Server == types.HiddenUserServer {
+			return info.RecipientAlt.ToNonAD()
+		}
+	} else if info.SenderAlt.Server == types.HiddenUserServer {
+		return info.SenderAlt.ToNonAD()
+	}
+	return types.EmptyJID
+}
+
 func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, client *whatsmeow.Client, evt any) map[string]interface{} {
 	result := make(map[string]interface{})
 
@@ -114,6 +153,20 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			} else if !evt.Info.IsFromMe && !evt.Info.SenderAlt.IsEmpty() && strings.Contains(evt.Info.SenderAlt.String(), "@s.whatsapp.net") {
 				chatJID = evt.Info.SenderAlt.String()
 			}
+			// Fallback: evento sem Alt (retry de mensagem indecifrável reentrega só o LID).
+			// O mapa LID→PN local já conhece o contato se ele já falou pelo telefone.
+			if strings.Contains(chatJID, "@lid") {
+				if pn := h.resolvePNFromStore(ctx, client, evt.Info.Chat); !pn.IsEmpty() {
+					chatJID = pn.String()
+					if strings.Contains(senderJID, "@lid") {
+						senderJID = pn.String()
+						result["from"] = senderJID
+					}
+					h.log.Info("LID resolvido para PN via store local (Alt ausente)",
+						zap.String("lid", evt.Info.Chat.String()),
+						zap.String("pn", chatJID))
+				}
+			}
 			if strings.Contains(chatJID, "@lid") {
 				h.log.Warn("Chat ainda é LID após resolução",
 					zap.String("original_chat", evt.Info.Chat.String()),
@@ -126,13 +179,15 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		result["chatJID"] = chatJID
 		result["to"] = chatJID
 		result["addressingMode"] = string(evt.Info.AddressingMode)
-		// When the identity is a LID with no reachable phone (username-only contact),
-		// expose the raw LID as a first-class field so consumers key on it instead of
-		// sniffing "@lid" out of `from`/`chatJID`. The @username is enriched separately
-		// (Contact event / send-time IsOnWhatsApp) — never via a per-message usync query,
-		// which would add ban surface.
-		if strings.Contains(chatJID, "@lid") {
-			result["lid"] = chatJID
+		// LID = identidade estável do contato. Emitido SEMPRE que conhecido, inclusive
+		// quando o PN foi resolvido: o consumidor grava waIdentity no contato do telefone
+		// e uma reentrega futura endereçada por LID casa no mesmo contato (rede de
+		// segurança contra conversa duplicada). Quando não há PN alcançável
+		// (contato username-only), o LID é a única chave. O @username é enriquecido
+		// à parte (evento Contact / IsOnWhatsApp no envio) — nunca via usync por
+		// mensagem, que somaria superfície de ban.
+		if lid := lidForEvent(&evt.Info); !lid.IsEmpty() {
+			result["lid"] = lid.String()
 		}
 		result["isFromMe"] = evt.Info.IsFromMe
 		result["isGroup"] = evt.Info.IsGroup
