@@ -98,7 +98,8 @@ func (h *Handler) setStatusMessage(c *gin.Context) {
 		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
 		return
 	}
-	if err := client.SetStatusMessage(c.Request.Context(), strings.TrimSpace(req.Message)); err != nil {
+	message := strings.TrimSpace(req.Message)
+	if err := client.SetStatusMessage(c.Request.Context(), types.SetStatusInput{Text: &message}); err != nil {
 		response.Error(c, http.StatusInternalServerError, err)
 		return
 	}
