@@ -28,20 +28,25 @@ type ContactEntry struct {
 }
 
 type SendInput struct {
-	InstanceID        string
-	To                string
-	Type              string
-	Text              string
-	MediaData         []byte
-	MediaType         string
-	Caption           string
-	FileName          string
-	Seconds           int
-	PTT               bool
-	MessageID         string
-	Quoted            string
-	Participant       string
-	QuotedText        string
+	InstanceID  string
+	To          string
+	Type        string
+	Text        string
+	MediaData   []byte
+	MediaType   string
+	Caption     string
+	FileName    string
+	Seconds     int
+	PTT         bool
+	MessageID   string
+	Quoted      string
+	Participant string
+	QuotedText  string
+	// QuotedFromMe: a mensagem citada foi enviada por NÓS. O chamador não tem como montar o
+	// Participant certo — em 1:1 o whatsmeow troca o destino por LID e assina com o nosso LID
+	// (send.go, ramo DefaultUserServer), então o telefone da instância não serve. Com esta flag
+	// quem resolve é ownJIDForChat, aqui dentro.
+	QuotedFromMe      bool
 	MentionedJids     []string
 	MarkReadMessageID string
 	MarkReadSender    string
@@ -52,6 +57,38 @@ type SendInput struct {
 	Longitude         float64
 	LocationName      string
 	Address           string
+}
+
+// ownJIDForChat devolve o JID com que NOSSAS mensagens aparecem naquele chat — é o que precisa
+// ir no ContextInfo.Participant ao citar mensagem própria.
+//
+// Espelha a escolha de ownID do whatsmeow em SendMessage (send.go): grupo em addressing LID e
+// qualquer 1:1 (o destino PN é trocado por LID antes do envio) assinam com o LID; só grupo em
+// modo PN legado assina com o telefone. Errar aqui é o mesmo que não mandar participant: o
+// cliente não casa a mensagem citada.
+//
+// GetGroupInfo faz um IQ, mas popula o groupCache que o SendMessage logo em seguida consulta —
+// na prática não é roundtrip perdido. Só é chamado citando mensagem própria em grupo.
+func (s *Service) ownJIDForChat(ctx context.Context, client *whatsmeow.Client, to types.JID) types.JID {
+	pn := client.Store.GetJID()
+	lid := client.Store.GetLID()
+	if lid.IsEmpty() {
+		return pn
+	}
+	if to.Server == types.GroupServer {
+		info, err := client.GetGroupInfo(ctx, to)
+		if err != nil {
+			// Sem saber o modo do grupo, PN é o fallback seguro (era o comportamento legado).
+			s.log.Warn("Falha ao obter info do grupo para resolver o participant do quote",
+				zap.String("group", to.String()), zap.Error(err))
+			return pn
+		}
+		if info.AddressingMode == types.AddressingModeLID {
+			return lid
+		}
+		return pn
+	}
+	return lid
 }
 
 func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, error) {
@@ -291,7 +328,13 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		if quotedID != "" {
 			ctxInfo.StanzaID = proto.String(quotedID)
 
-			if participant != "" {
+			// O ContextInfo não tem campo FromMe (só StanzaID/Participant/QuotedMessage/RemoteJID):
+			// o Participant é o ÚNICO sinal de autoria. Citando mensagem nossa, ele tem de ser o
+			// nosso JID — mandar o do contato faz o cliente procurar a citada como mensagem dele,
+			// não achar, e cair no fallback (sem miniatura, sem pular pra original).
+			if input.QuotedFromMe {
+				ctxInfo.Participant = proto.String(s.ownJIDForChat(ctx, client, toJID).ToNonAD().String())
+			} else if participant != "" {
 				if !strings.Contains(participant, "@") {
 					participant = participant + "@s.whatsapp.net"
 				}

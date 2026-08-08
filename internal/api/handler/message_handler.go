@@ -13,6 +13,12 @@ import (
 	messageSvc "github.com/open-apime/apime/internal/service/message"
 )
 
+// postFormBool reads a boolean flag from multipart form data (absent = false).
+func postFormBool(c *gin.Context, key string) bool {
+	v, err := strconv.ParseBool(c.PostForm(key))
+	return err == nil && v
+}
+
 // parseMentionedJids parses mentionedJids from form data (JSON array string)
 func parseMentionedJids(c *gin.Context) []string {
 	raw := c.PostForm("mentionedJids")
@@ -85,6 +91,7 @@ type sendTextRequest struct {
 	Quoted            string   `json:"quoted"`
 	QuotedParticipant string   `json:"quotedParticipant"`
 	QuotedText        string   `json:"quotedText"`
+	QuotedFromMe      bool     `json:"quotedFromMe"`
 	MentionedJids     []string `json:"mentionedJids"`
 	MarkReadMessageID string   `json:"markReadMessageId"`
 	MarkReadSender    string   `json:"markReadSender"`
@@ -116,6 +123,7 @@ func (h *MessageHandler) sendText(c *gin.Context) {
 		Quoted:            req.Quoted,
 		Participant:       req.QuotedParticipant,
 		QuotedText:        req.QuotedText,
+		QuotedFromMe:      req.QuotedFromMe,
 		MentionedJids:     req.MentionedJids,
 		MarkReadMessageID: req.MarkReadMessageID,
 		MarkReadSender:    req.MarkReadSender,
@@ -191,6 +199,7 @@ func (h *MessageHandler) sendMedia(c *gin.Context) {
 		Quoted:            c.PostForm("quoted"),
 		Participant:       c.PostForm("quotedParticipant"),
 		QuotedText:        c.PostForm("quotedText"),
+		QuotedFromMe:      postFormBool(c, "quotedFromMe"),
 		MentionedJids:     parseMentionedJids(c),
 		MarkReadMessageID: c.PostForm("markReadMessageId"),
 		MarkReadSender:    c.PostForm("markReadSender"),
@@ -268,6 +277,7 @@ func (h *MessageHandler) sendAudio(c *gin.Context) {
 		Quoted:            c.PostForm("quoted"),
 		Participant:       c.PostForm("quotedParticipant"),
 		QuotedText:        c.PostForm("quotedText"),
+		QuotedFromMe:      postFormBool(c, "quotedFromMe"),
 		MentionedJids:     parseMentionedJids(c),
 		MarkReadMessageID: c.PostForm("markReadMessageId"),
 		MarkReadSender:    c.PostForm("markReadSender"),
@@ -343,6 +353,7 @@ func (h *MessageHandler) sendDocument(c *gin.Context) {
 		Quoted:            c.PostForm("quoted"),
 		Participant:       c.PostForm("quotedParticipant"),
 		QuotedText:        c.PostForm("quotedText"),
+		QuotedFromMe:      postFormBool(c, "quotedFromMe"),
 		MentionedJids:     parseMentionedJids(c),
 		MarkReadMessageID: c.PostForm("markReadMessageId"),
 		MarkReadSender:    c.PostForm("markReadSender"),
@@ -373,6 +384,7 @@ type sendContactRequest struct {
 	Quoted            string                    `json:"quoted"`
 	QuotedParticipant string                    `json:"quotedParticipant"`
 	QuotedText        string                    `json:"quotedText"`
+	QuotedFromMe      bool                      `json:"quotedFromMe"`
 	MentionedJids     []string                  `json:"mentionedJids"`
 }
 
@@ -402,6 +414,7 @@ func (h *MessageHandler) sendContact(c *gin.Context) {
 		Quoted:        req.Quoted,
 		Participant:   req.QuotedParticipant,
 		QuotedText:    req.QuotedText,
+		QuotedFromMe:  req.QuotedFromMe,
 		MentionedJids: req.MentionedJids,
 	})
 	if err != nil {
@@ -433,6 +446,7 @@ type sendLocationRequest struct {
 	Quoted            string   `json:"quoted"`
 	QuotedParticipant string   `json:"quotedParticipant"`
 	QuotedText        string   `json:"quotedText"`
+	QuotedFromMe      bool     `json:"quotedFromMe"`
 	MentionedJids     []string `json:"mentionedJids"`
 }
 
@@ -463,6 +477,7 @@ func (h *MessageHandler) sendLocation(c *gin.Context) {
 		Quoted:        req.Quoted,
 		Participant:   req.QuotedParticipant,
 		QuotedText:    req.QuotedText,
+		QuotedFromMe:  req.QuotedFromMe,
 		MentionedJids: req.MentionedJids,
 	})
 	if err != nil {
