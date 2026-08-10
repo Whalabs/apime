@@ -82,6 +82,17 @@ func CaptureError(err error, tags map[string]string) {
 
 // CaptureMessage sends a message with a level.
 func CaptureMessage(msg string, level sentry.Level, tags map[string]string) {
+	captureMessage(msg, level, tags, nil)
+}
+
+// CaptureMessageWithFingerprint sends a message with an explicit grouping key.
+// Use it when the text carries identifiers (IDs, JIDs) that would otherwise open
+// a new issue per occurrence instead of incrementing one.
+func CaptureMessageWithFingerprint(msg string, level sentry.Level, tags map[string]string, fingerprint []string) {
+	captureMessage(msg, level, tags, fingerprint)
+}
+
+func captureMessage(msg string, level sentry.Level, tags map[string]string, fingerprint []string) {
 	if !enabled || msg == "" {
 		return
 	}
@@ -90,6 +101,9 @@ func CaptureMessage(msg string, level sentry.Level, tags map[string]string) {
 		scope.SetLevel(level)
 		for k, v := range tags {
 			scope.SetTag(k, v)
+		}
+		if len(fingerprint) > 0 {
+			scope.SetFingerprint(fingerprint)
 		}
 		hub.CaptureMessage(msg)
 	})
