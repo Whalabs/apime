@@ -55,10 +55,12 @@ type CreateInput struct {
 	OwnerUserID   string
 }
 
+// UpdateInput descreve uma atualização parcial da instância.
+// Campos com ponteiro nil são preservados como estão (não sobrescreve).
 type UpdateInput struct {
 	Name          string
-	WebhookURL    string
-	WebhookSecret string
+	WebhookURL    *string
+	WebhookSecret *string
 	OwnerUserID   string
 }
 
@@ -126,16 +128,31 @@ func (s *Service) Update(ctx context.Context, id string, input UpdateInput) (mod
 	if err != nil {
 		return model.Instance{}, err
 	}
-	if strings.TrimSpace(input.Name) == "" {
-		return model.Instance{}, ErrInvalidName
+	if err := applyUpdate(&inst, input); err != nil {
+		return model.Instance{}, err
 	}
-	if strings.TrimSpace(input.WebhookURL) != "" && !strings.HasPrefix(strings.TrimSpace(input.WebhookURL), "http") {
-		return model.Instance{}, errors.New("webhook inválido")
+	return s.repo.Update(ctx, inst)
+}
+
+// applyUpdate valida a entrada e aplica só os campos presentes sobre a instância
+// existente. Webhook com ponteiro nil é preservado — antes um PUT sem webhook_url
+// zerava o webhook da instância e ela parava de enviar/receber silenciosamente.
+func applyUpdate(inst *model.Instance, input UpdateInput) error {
+	if strings.TrimSpace(input.Name) == "" {
+		return ErrInvalidName
+	}
+	if input.WebhookURL != nil {
+		url := strings.TrimSpace(*input.WebhookURL)
+		if url != "" && !strings.HasPrefix(url, "http") {
+			return errors.New("webhook inválido")
+		}
+		inst.WebhookURL = url
+	}
+	if input.WebhookSecret != nil {
+		inst.WebhookSecret = strings.TrimSpace(*input.WebhookSecret)
 	}
 	inst.Name = strings.TrimSpace(input.Name)
-	inst.WebhookURL = strings.TrimSpace(input.WebhookURL)
-	inst.WebhookSecret = strings.TrimSpace(input.WebhookSecret)
-	return s.repo.Update(ctx, inst)
+	return nil
 }
 
 func (s *Service) UpdateByUser(ctx context.Context, id string, input UpdateInput) (model.Instance, error) {
@@ -148,15 +165,9 @@ func (s *Service) UpdateByUser(ctx context.Context, id string, input UpdateInput
 		return model.Instance{}, storage.ErrNotFound
 	}
 
-	if strings.TrimSpace(input.Name) == "" {
-		return model.Instance{}, ErrInvalidName
+	if err := applyUpdate(&inst, input); err != nil {
+		return model.Instance{}, err
 	}
-	if strings.TrimSpace(input.WebhookURL) != "" && !strings.HasPrefix(strings.TrimSpace(input.WebhookURL), "http") {
-		return model.Instance{}, errors.New("webhook inválido")
-	}
-	inst.Name = strings.TrimSpace(input.Name)
-	inst.WebhookURL = strings.TrimSpace(input.WebhookURL)
-	inst.WebhookSecret = strings.TrimSpace(input.WebhookSecret)
 	return s.repo.Update(ctx, inst)
 }
 

@@ -18,6 +18,8 @@ import (
 	"github.com/open-apime/apime/internal/storage/model"
 )
 
+func ptr[T any](v T) *T { return &v }
+
 func (h *Handler) overview(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -111,12 +113,17 @@ func (h *Handler) updateInstance(c *gin.Context) {
 		callerID = "admin"
 	}
 
-	_, err := h.instances.UpdateByUser(c.Request.Context(), id, instance.UpdateInput{
-		Name:          name,
-		WebhookURL:    strings.TrimSpace(c.PostForm("webhook_url")),
-		WebhookSecret: strings.TrimSpace(c.PostForm("webhook_secret")),
-		OwnerUserID:   callerID,
-	})
+	// Só envia o campo se ele veio no form: campo ausente preserva o valor atual,
+	// campo presente e vazio limpa (comportamento esperado do formulário).
+	in := instance.UpdateInput{Name: name, OwnerUserID: callerID}
+	if v, ok := c.GetPostForm("webhook_url"); ok {
+		in.WebhookURL = ptr(strings.TrimSpace(v))
+	}
+	if v, ok := c.GetPostForm("webhook_secret"); ok {
+		in.WebhookSecret = ptr(strings.TrimSpace(v))
+	}
+
+	_, err := h.instances.UpdateByUser(c.Request.Context(), id, in)
 	if err != nil {
 		h.logger.Warn("erro ao atualizar instância", zap.Error(err))
 		redirectWithMessage(c, "/dashboard", "error", "Falha ao atualizar instância.")

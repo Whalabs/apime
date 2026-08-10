@@ -57,10 +57,12 @@ type createInstanceRequest struct {
 	WebhookSecret string `json:"webhook_secret"`
 }
 
+// Ponteiro para diferenciar campo omitido (preserva o valor atual) de campo
+// enviado vazio (limpa). Sem isso, um PUT só com "name" zerava o webhook.
 type updateInstanceRequest struct {
-	Name          string `json:"name" binding:"required,min=2"`
-	WebhookURL    string `json:"webhook_url"`
-	WebhookSecret string `json:"webhook_secret"`
+	Name          string  `json:"name" binding:"required,min=2"`
+	WebhookURL    *string `json:"webhook_url"`
+	WebhookSecret *string `json:"webhook_secret"`
 }
 
 func (h *Handler) create(c *gin.Context) {
