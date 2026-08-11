@@ -62,6 +62,11 @@ func (h *Handler) checkIsWhatsApp(c *gin.Context) {
 		result.IsIn = true
 	} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 		result.IsIn = false
+	} else if errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {
+		// Socket caído: o número não foi reprovado, só não deu para checar. Responder 200 com
+		// IsIn:false afirmaria que ele não existe, então devolvemos 503 para o chamador repetir.
+		response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
+		return
 	} else {
 		response.Error(c, http.StatusInternalServerError, err)
 		return
