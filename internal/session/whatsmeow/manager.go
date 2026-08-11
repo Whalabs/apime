@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -24,78 +23,8 @@ import (
 
 const sentryLevelError = sentry.LevelError
 
-// Errors whatsmeow logs as Error but that it recovers from on its own. They are
-// expected background behavior, not incidents, so we downgrade them to Debug and
-// skip Sentry reporting to avoid noise.
-//
-// Two families live here:
-//   - websocket reconnects (auto-recovered by whatsmeow);
-//   - app-state sync/decode and retry receipts, which the library retries by
-//     itself and which carry a message/JID in the text, so every occurrence used
-//     to open a brand-new Sentry issue.
-var expectedReconnectNoise = []string{
-	"failed to read frame header",
-	"error reading from websocket",
-	"websocket not connected",
-	"autoreconnect",
-	"keepalive timeout",
-	"failed to resync app state",
-	"failed to sync app state",
-	"failed to handle retry receipt",
-	"failed to decode app state",
-}
-
-func isExpectedReconnectNoise(msg string) bool {
-	m := strings.ToLower(msg)
-	for _, p := range expectedReconnectNoise {
-		if strings.Contains(m, p) {
-			return true
-		}
-	}
-	return false
-}
-
-// whatsmeow formats identifiers (message ID, JID, instance) straight into the log
-// text, so using the message as the Sentry title splits one recurring failure into
-// hundreds of one-off issues. We group by module plus the message skeleton: the
-// leading sentence with every identifier-looking token replaced by a placeholder.
-// That keeps distinct failures apart while collapsing the same one into a single
-// issue with a counter.
-func noiseFingerprint(module, msg string) []string {
-	skeleton := msg
-	if idx := strings.IndexAny(skeleton, ":("); idx > 0 {
-		skeleton = skeleton[:idx]
-	}
-
-	fields := strings.Fields(skeleton)
-	for i, f := range fields {
-		if looksLikeIdentifier(f) {
-			fields[i] = "<id>"
-		}
-	}
-	skeleton = strings.Join(fields, " ")
-
-	if len(skeleton) > 60 {
-		skeleton = skeleton[:60]
-	}
-	return []string{"whatsmeow", module, skeleton}
-}
-
-// looksLikeIdentifier reports whether a token is a JID, message ID, or similar
-// per-occurrence value rather than a stable word of the message.
-func looksLikeIdentifier(tok string) bool {
-	if strings.ContainsAny(tok, "@/") {
-		return true
-	}
-	digits := 0
-	for _, r := range tok {
-		if r >= '0' && r <= '9' {
-			digits++
-		}
-	}
-	// Words never carry this many digits; IDs and phone numbers always do.
-	return digits >= 4
-}
+// A lista de ruído esperado e o fingerprint vivem em `sentryx` porque os mesmos textos chegam ao
+// Sentry por duas portas: este logger e o middleware HTTP. Ver internal/pkg/sentryx/noise.go.
 
 type zapLogger struct {
 	log    *zap.Logger
@@ -114,7 +43,7 @@ func (z *zapLogger) Warnf(msg string, args ...interface{}) {
 func (z *zapLogger) Errorf(msg string, args ...interface{}) {
 	formatted := fmt.Sprintf(msg, args...)
 	// Expected reconnect noise: downgrade to Debug and skip Sentry reporting.
-	if isExpectedReconnectNoise(formatted) {
+	if sentryx.IsExpectedNoise(formatted) {
 		z.log.Debug(formatted, zap.String("module", z.module))
 		return
 	}
@@ -122,7 +51,7 @@ func (z *zapLogger) Errorf(msg string, args ...interface{}) {
 	sentryx.CaptureMessageWithFingerprint(formatted, sentryLevelError, map[string]string{
 		"source": "whatsmeow",
 		"module": z.module,
-	}, noiseFingerprint(z.module, formatted))
+	}, sentryx.Fingerprint("whatsmeow:"+z.module, formatted))
 }
 func (z *zapLogger) Sub(module string) waLog.Logger {
 	return &zapLogger{log: z.log, module: module}

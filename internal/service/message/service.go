@@ -25,6 +25,10 @@ var (
 	// ErrContactReachoutLocked: the contact recently returned 463 (reach-out timelock) on this
 	// connection and hasn't replied yet. Terminal send failure — released on the contact's inbound.
 	ErrContactReachoutLocked = errors.New("contato com restrição de reach-out (463); aguardando o contato iniciar conversa")
+	// ErrRecipientLookupUnavailable: the number could not be checked because the socket was down
+	// (whatsmeow's usync query needs the websocket). The request is fine and the number may well
+	// exist — only the lookup failed, so this is a RETRYABLE 503, not a 500.
+	ErrRecipientLookupUnavailable = errors.New("não foi possível validar o destinatário: conexão indisponível")
 )
 
 type Service struct {

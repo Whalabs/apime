@@ -68,6 +68,17 @@ func Flush(timeout time.Duration) {
 
 // CaptureError sends an error with optional tags.
 func CaptureError(err error, tags map[string]string) {
+	captureError(err, tags, nil)
+}
+
+// CaptureErrorWithFingerprint sends an error with an explicit grouping key. Use it when the
+// message carries identifiers (phone, JID, IDs) that would otherwise open a new issue per
+// occurrence instead of incrementing one.
+func CaptureErrorWithFingerprint(err error, tags map[string]string, fingerprint []string) {
+	captureError(err, tags, fingerprint)
+}
+
+func captureError(err error, tags map[string]string, fingerprint []string) {
 	if !enabled || err == nil {
 		return
 	}
@@ -75,6 +86,9 @@ func CaptureError(err error, tags map[string]string) {
 	hub.WithScope(func(scope *sentry.Scope) {
 		for k, v := range tags {
 			scope.SetTag(k, v)
+		}
+		if len(fingerprint) > 0 {
+			scope.SetFingerprint(fingerprint)
 		}
 		hub.CaptureException(err)
 	})

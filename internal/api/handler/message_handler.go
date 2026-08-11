@@ -133,7 +133,7 @@ func (h *MessageHandler) sendText(c *gin.Context) {
 			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
 		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 			response.Error(c, http.StatusBadRequest, err)
-		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) {
+		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) || errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {
 			response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
 		} else if errors.Is(err, messageSvc.ErrContactReachoutLocked) {
 			response.Error(c, http.StatusUnprocessableEntity, err)
@@ -209,7 +209,7 @@ func (h *MessageHandler) sendMedia(c *gin.Context) {
 			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
 		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 			response.Error(c, http.StatusBadRequest, err)
-		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) {
+		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) || errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {
 			response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
 		} else if errors.Is(err, messageSvc.ErrContactReachoutLocked) {
 			response.Error(c, http.StatusUnprocessableEntity, err)
@@ -287,7 +287,7 @@ func (h *MessageHandler) sendAudio(c *gin.Context) {
 			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
 		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 			response.Error(c, http.StatusBadRequest, err)
-		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) {
+		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) || errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {
 			response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
 		} else if errors.Is(err, messageSvc.ErrContactReachoutLocked) {
 			response.Error(c, http.StatusUnprocessableEntity, err)
@@ -363,7 +363,7 @@ func (h *MessageHandler) sendDocument(c *gin.Context) {
 			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
 		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 			response.Error(c, http.StatusBadRequest, err)
-		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) {
+		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) || errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {
 			response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
 		} else if errors.Is(err, messageSvc.ErrContactReachoutLocked) {
 			response.Error(c, http.StatusUnprocessableEntity, err)
@@ -424,7 +424,7 @@ func (h *MessageHandler) sendContact(c *gin.Context) {
 			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
 		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 			response.Error(c, http.StatusBadRequest, err)
-		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) {
+		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) || errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {
 			response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
 		} else if errors.Is(err, messageSvc.ErrContactReachoutLocked) {
 			response.Error(c, http.StatusUnprocessableEntity, err)
@@ -487,7 +487,7 @@ func (h *MessageHandler) sendLocation(c *gin.Context) {
 			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
 		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 			response.Error(c, http.StatusBadRequest, err)
-		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) {
+		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) || errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {
 			response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
 		} else if errors.Is(err, messageSvc.ErrContactReachoutLocked) {
 			response.Error(c, http.StatusUnprocessableEntity, err)

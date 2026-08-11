@@ -188,7 +188,9 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 
 	toJID, err := s.ResolveJID(ctx, client, input.To)
 	if err != nil {
-		if errors.Is(err, ErrInvalidJID) {
+		// Sobem sem o prefixo do destinatário: o handler decide o status por eles, e manter o
+		// telefone fora do texto evita abrir uma issue nova por número no Sentry.
+		if errors.Is(err, ErrInvalidJID) || errors.Is(err, ErrRecipientLookupUnavailable) {
 			return model.Message{}, err
 		}
 		return model.Message{}, fmt.Errorf("falha ao resolver destinatário %s: %w", input.To, err)

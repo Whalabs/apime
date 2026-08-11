@@ -18,6 +18,15 @@ import (
 
 var jidCache sync.Map
 
+// isTransportDown reports whether the error is the socket being unavailable rather than a verdict
+// about the number. whatsmeow wraps the cause with %w, so errors.Is reaches it through the layers.
+func isTransportDown(err error) bool {
+	return errors.Is(err, whatsmeow.ErrNotConnected) ||
+		errors.Is(err, whatsmeow.ErrIQTimedOut) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, context.Canceled)
+}
+
 func resolveIsOnWhatsAppJID(item types.IsOnWhatsAppResponse) types.JID {
 	if item.JID.Server == types.DefaultUserServer && item.JID.User != "" {
 		return item.JID
@@ -120,6 +129,13 @@ func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phon
 	s.log.Debug("Consultando IsOnWhatsApp", zap.String("phone", phone))
 	resp, err := client.IsOnWhatsApp(ctx, []string{phone})
 	if err != nil {
+		// A consulta usync depende do websocket. Se ele está caído (reconexão em curso), o número
+		// não foi reprovado: só não deu para checar. Marcamos como indisponibilidade temporária
+		// para o handler responder 503 (retentável) em vez de 500, e para não virar incidente.
+		if isTransportDown(err) {
+			s.log.Warn("IsOnWhatsApp indisponível (socket caído) - envio adiado", zap.String("phone", phone), zap.Error(err))
+			return types.EmptyJID, fmt.Errorf("%w: %v", ErrRecipientLookupUnavailable, err)
+		}
 		s.log.Error("falha ao consultar IsOnWhatsApp - abortando envio", zap.String("phone", phone), zap.Error(err))
 		return types.EmptyJID, fmt.Errorf("falha ao validar número no WhatsApp: %w", err)
 	}
