@@ -12,13 +12,13 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/lib/pq v1.12.3
-	github.com/mattn/go-sqlite3 v1.14.48
-	github.com/redis/go-redis/v9 v9.21.0
+	github.com/mattn/go-sqlite3 v1.14.49
+	github.com/redis/go-redis/v9 v9.22.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	go.mau.fi/whatsmeow v0.0.0-20260306150847-8f48ec56ce6c
 	go.uber.org/zap v1.28.0
-	golang.org/x/crypto v0.54.0
-	google.golang.org/protobuf v1.36.11
+	golang.org/x/crypto v0.55.0
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
@@ -49,7 +49,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
-	github.com/petermattis/goid v0.0.0-20260713124913-97594f28f5ca // indirect
+	github.com/petermattis/goid v0.0.0-20260816044145-ed329add6b1b // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.0 // indirect
 	github.com/rs/zerolog v1.35.1 // indirect
@@ -57,16 +57,16 @@ require (
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.31 // indirect
 	go.mau.fi/libsignal v0.2.2 // indirect
-	go.mau.fi/util v0.9.12-0.20260717235539-f9ffa7eca58d // indirect
+	go.mau.fi/util v0.10.0 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.23.0 // indirect
-	golang.org/x/exp v0.0.0-20260709172345-9ea1abe57597 // indirect
-	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/exp v0.0.0-20260813180055-c1d0aacb2297 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 )
 
 // Exclude versões problemáticas que removem pacotes internos
@@ -94,4 +94,4 @@ exclude (
 	github.com/gin-gonic/gin v1.11.0
 )
 
-replace go.mau.fi/whatsmeow => github.com/Whalabs/whatsmeow v0.0.0-20260814184430-ba040e0c4895
+replace go.mau.fi/whatsmeow => github.com/Whalabs/whatsmeow v0.0.0-20260817180556-258e04c89fbf
