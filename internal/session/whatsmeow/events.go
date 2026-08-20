@@ -268,6 +268,12 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 			banReason, int(v.Code), expireStr,
 		))
 
+		// O consumidor precisa saber do ban: sem isso a conexão continuava "conectada" lá
+		// enquanto todo envio falhava, e o motivo só existia no log daqui.
+		if handler != nil {
+			go handler.Handle(context.Background(), instanceID, instanceJID, client, v)
+		}
+
 		m.updateInstanceStatus(instanceID, model.InstanceStatusError)
 		m.cooldownInstance(instanceID, v.Expire)
 		if callback != nil {

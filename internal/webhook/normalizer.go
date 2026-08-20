@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
@@ -655,6 +656,21 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 	case *events.LoggedOut:
 		result["type"] = "disconnected"
 		result["reason"] = evt.Reason.String()
+	case *events.TemporaryBan:
+		// The account itself was temporarily banned (whatsmeow "temporary-ban" from the server).
+		// Same webhook type as the reach-out timelock, so a consumer that already handles
+		// temporary_ban gets this one for free; consumers that don't fall into their default
+		// branch. Without this the ban was only visible in the apime log, and the connection
+		// stayed "connected" on the consumer side while every send failed.
+		result["type"] = "temporary_ban"
+		result["reason"] = evt.Code.String()
+		result["code"] = int(evt.Code)
+		result["active"] = true
+		if evt.Expire > 0 {
+			// RFC3339 in the webhook JSON → the consumer does new Date(restrictedUntil).
+			// The server sends a duration, not a date, so it is anchored here.
+			result["restrictedUntil"] = time.Now().Add(evt.Expire)
+		}
 	case *events.NotifyAccountReachoutTimelock:
 		// AUTHORITATIVE server notification about the reach-out timelock (the cause of error 463).
 		// It's the exact source of the restriction state — no need to guess the duration (it's not "always 7 days"):
