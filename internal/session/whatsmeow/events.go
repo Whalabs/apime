@@ -268,8 +268,8 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 			banReason, int(v.Code), expireStr,
 		))
 
-		// O consumidor precisa saber do ban: sem isso a conexão continuava "conectada" lá
-		// enquanto todo envio falhava, e o motivo só existia no log daqui.
+		// The consumer needs to know about the ban: without this the connection stayed "connected"
+		// on their side while every send failed, and the reason lived only in our log.
 		if handler != nil {
 			go handler.Handle(context.Background(), instanceID, instanceJID, client, v)
 		}

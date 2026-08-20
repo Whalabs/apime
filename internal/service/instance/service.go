@@ -55,8 +55,7 @@ type CreateInput struct {
 	OwnerUserID   string
 }
 
-// UpdateInput descreve uma atualização parcial da instância.
-// Campos com ponteiro nil são preservados como estão (não sobrescreve).
+// UpdateInput describes a partial instance update. Nil pointer fields are preserved as-is.
 type UpdateInput struct {
 	Name          string
 	WebhookURL    *string
@@ -134,9 +133,9 @@ func (s *Service) Update(ctx context.Context, id string, input UpdateInput) (mod
 	return s.repo.Update(ctx, inst)
 }
 
-// applyUpdate valida a entrada e aplica só os campos presentes sobre a instância
-// existente. Webhook com ponteiro nil é preservado — antes um PUT sem webhook_url
-// zerava o webhook da instância e ela parava de enviar/receber silenciosamente.
+// applyUpdate validates the input and applies only the fields present onto the existing instance.
+// A nil webhook pointer is preserved: a PUT without webhook_url used to wipe the instance webhook,
+// silently stopping delivery.
 func applyUpdate(inst *model.Instance, input UpdateInput) error {
 	if strings.TrimSpace(input.Name) == "" {
 		return ErrInvalidName

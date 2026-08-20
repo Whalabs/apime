@@ -23,8 +23,8 @@ import (
 
 const sentryLevelError = sentry.LevelError
 
-// A lista de ruído esperado e o fingerprint vivem em `sentryx` porque os mesmos textos chegam ao
-// Sentry por duas portas: este logger e o middleware HTTP. Ver internal/pkg/sentryx/noise.go.
+// The expected-noise list and the fingerprint live in `sentryx` because the same texts reach Sentry
+// through two doors: this logger and the HTTP middleware. See internal/pkg/sentryx/noise.go.
 
 type zapLogger struct {
 	log    *zap.Logger

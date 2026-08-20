@@ -32,12 +32,12 @@ type inboundEntry struct {
 
 var (
 	inboundTracker sync.Map // key: "instanceID:chatJID" → value: inboundEntry
-	// Momento da última mensagem recebida no chat, que sobrevive ao consumo do tracker.
+	// Timestamp of the last inbound message in the chat, surviving the tracker consumption.
 	//
-	// `popLastInbound` faz LoadAndDelete, porque o markread só deve acontecer uma vez. Mas o tempo
-	// desde a última mensagem do contato continua sendo necessário depois disso: é o que permite
-	// descontar do "digitando" a espera que o contato já teve. Sem esta marca, a segunda mensagem
-	// de uma sequência voltaria a simular a digitação inteira.
+	// popLastInbound does LoadAndDelete because markread must happen only once. But the time since
+	// the contact.s last message is still needed after that: it is what lets us discount from the
+	// typing delay the wait the contact already had. Without it, the second message in a sequence
+	// would simulate the full typing again.
 	lastInboundAt sync.Map // key: "instanceID:chatJID" → value: time.Time
 	cleanupOnce   sync.Once
 )
@@ -48,27 +48,27 @@ var (
 func TrackInbound(instanceID, chatJID, messageID, senderJID string) {
 	cleanupOnce.Do(startCleanupLoop)
 	key := instanceID + ":" + normalizeChatKey(chatJID)
-	agora := time.Now()
+	now := time.Now()
 	inboundTracker.Store(key, inboundEntry{
 		messageID: messageID,
 		senderJID: senderJID,
-		trackedAt: agora,
+		trackedAt: now,
 	})
-	lastInboundAt.Store(key, agora)
+	lastInboundAt.Store(key, now)
 }
 
-// tempoDesdeUltimaInbound diz há quanto tempo o contato falou pela última vez neste chat.
-// Segundo retorno falso quando não há registro (chat sem inbound conhecida nesta execução).
-func tempoDesdeUltimaInbound(instanceID, chatJID string) (time.Duration, bool) {
-	valor, ok := lastInboundAt.Load(instanceID + ":" + normalizeChatKey(chatJID))
+// timeSinceLastInbound reports how long ago the contact last spoke in this chat.
+// Second return is false when there is no record (no known inbound in this run).
+func timeSinceLastInbound(instanceID, chatJID string) (time.Duration, bool) {
+	value, ok := lastInboundAt.Load(instanceID + ":" + normalizeChatKey(chatJID))
 	if !ok {
 		return 0, false
 	}
-	quando, ok := valor.(time.Time)
+	at, ok := value.(time.Time)
 	if !ok {
 		return 0, false
 	}
-	return time.Since(quando), true
+	return time.Since(at), true
 }
 
 // popLastInbound returns and removes the last inbound message for a given chat.
@@ -115,9 +115,9 @@ func startCleanupLoop() {
 				}
 				return true
 			})
-			// A marca de tempo tem o mesmo TTL: sem esta limpeza ela cresceria para sempre.
+			// Same TTL for the timestamp map: without this cleanup it would grow forever.
 			lastInboundAt.Range(func(key, val any) bool {
-				if quando, ok := val.(time.Time); ok && now.Sub(quando) > inboundTTL {
+				if at, ok := val.(time.Time); ok && now.Sub(at) > inboundTTL {
 					lastInboundAt.Delete(key)
 				}
 				return true

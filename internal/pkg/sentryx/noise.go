@@ -2,19 +2,13 @@ package sentryx
 
 import "strings"
 
-// Errors that the stack recovers from on its own. They are expected background behavior, not
-// incidents, so callers downgrade them to Debug and skip Sentry reporting.
+// Errors the stack recovers from on its own: websocket reconnects, app-state sync/decode and retry
+// receipts, and request-scoped transport failures. Expected background behavior, so callers
+// downgrade them to Debug and skip Sentry.
 //
-// Three families live here:
-//   - websocket reconnects (auto-recovered by whatsmeow);
-//   - app-state sync/decode and retry receipts, which the library retries by itself;
-//   - request-scoped transport failures (socket down, context canceled) that surface on the HTTP
-//     layer when a send lands mid-reconnect. The request already answers 503, and the caller
-//     retries: reporting it again only creates noise.
-//
-// The list lives here, and not next to the whatsmeow logger, because the same texts reach Sentry
-// through two different doors: the zap logger and the Gin middleware. Keeping one source of truth
-// is what stops a filter from covering only half the paths.
+// The list lives here rather than next to the whatsmeow logger because the same texts reach Sentry
+// through two doors, the zap logger and the Gin middleware, and one source of truth is what stops a
+// filter from covering only half the paths.
 var expectedNoise = []string{
 	"failed to read frame header",
 	"error reading from websocket",
@@ -41,13 +35,10 @@ func IsExpectedNoise(msg string) bool {
 	return false
 }
 
-// Fingerprint builds a stable Sentry grouping key for messages that carry identifiers.
-//
-// Errors here interpolate message IDs, JIDs and phone numbers straight into the text, so using it
-// as the issue title splits one recurring failure into hundreds of one-off issues. We group by
-// scope plus the message skeleton: the leading sentence with every identifier-looking token
-// replaced by a placeholder. That keeps distinct failures apart while collapsing the same one
-// into a single issue with a counter.
+// Fingerprint builds a stable Sentry grouping key for messages carrying identifiers. These errors
+// interpolate message IDs, JIDs and phone numbers into the text, so using it as the issue title
+// splits one recurring failure into hundreds of one-off issues. Groups by scope plus the message
+// skeleton, with identifier-looking tokens replaced by a placeholder.
 func Fingerprint(scope, msg string) []string {
 	skeleton := msg
 	if idx := strings.IndexAny(skeleton, ":("); idx > 0 {

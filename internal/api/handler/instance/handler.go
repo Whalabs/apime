@@ -57,8 +57,8 @@ type createInstanceRequest struct {
 	WebhookSecret string `json:"webhook_secret"`
 }
 
-// Ponteiro para diferenciar campo omitido (preserva o valor atual) de campo
-// enviado vazio (limpa). Sem isso, um PUT só com "name" zerava o webhook.
+// Pointers to tell an omitted field (preserve current value) from one sent empty (clear it).
+// Without this a PUT carrying only "name" wiped the webhook.
 type updateInstanceRequest struct {
 	Name          string  `json:"name" binding:"required,min=2"`
 	WebhookURL    *string `json:"webhook_url"`

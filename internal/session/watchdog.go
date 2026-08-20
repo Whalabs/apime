@@ -60,9 +60,9 @@ func (w *Watchdog) HandleEvent(evt any) {
 	switch evt.(type) {
 	case *events.Disconnected:
 		w.log.Warn("watchdog: desconectado", zap.String("instance", w.instanceID))
-		// Presença sinalizada antes da queda não vale mais do outro lado: sem esquecer, o primeiro
-		// envio após reconectar confiaria num "online"/"digitando" que já não existe.
-		message.EsquecerPresencaDaInstancia(w.instanceID)
+		// Presence signaled before the drop no longer holds on the other side: without forgetting,
+		// the first send after reconnecting would trust an "online"/"typing" that is gone.
+		message.ForgetInstancePresence(w.instanceID)
 		ctx := context.Background()
 		inst, err := w.repo.GetByID(ctx, w.instanceID)
 		if err == nil {
@@ -74,9 +74,9 @@ func (w *Watchdog) HandleEvent(evt any) {
 		}
 	case *events.Connected:
 		w.log.Info("watchdog: conectado", zap.String("instance", w.instanceID))
-		// Também aqui, e não só na queda: reconexão automática pode não passar por Disconnected, e
-		// confiar numa presença sinalizada na sessão anterior deixaria o contato sem indicador.
-		message.EsquecerPresencaDaInstancia(w.instanceID)
+		// Here too, not only on the drop: an automatic reconnect may skip Disconnected, and trusting
+		// presence signaled in the previous session would leave the contact without an indicator.
+		message.ForgetInstancePresence(w.instanceID)
 		ctx := context.Background()
 		inst, err := w.repo.GetByID(ctx, w.instanceID)
 		if err == nil {

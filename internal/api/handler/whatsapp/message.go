@@ -63,8 +63,8 @@ func (h *Handler) checkIsWhatsApp(c *gin.Context) {
 	} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 		result.IsIn = false
 	} else if errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {
-		// Socket caído: o número não foi reprovado, só não deu para checar. Responder 200 com
-		// IsIn:false afirmaria que ele não existe, então devolvemos 503 para o chamador repetir.
+		// Socket down: the number was not rejected, it just could not be checked. Answering 200
+		// with IsIn:false would claim it does not exist, so 503 tells the caller to retry.
 		response.ErrorWithMessage(c, http.StatusServiceUnavailable, "sessão não pronta, tente novamente")
 		return
 	} else {
@@ -284,9 +284,9 @@ func (h *Handler) sendReaction(c *gin.Context) {
 	defer unlock()
 
 	// Resolve o destino pelo mesmo caminho do envio de texto (ResolveJID popula o
-	// mapeamento PN->LID no store da lib). Sem isso, SendMessage força PN->LID e falha
-	// com "no LID found ... from server" quando o LID não está em cache. Trata @lid/@g.us.
-	// Dentro do lock, como o envio de texto, para serializar o IsOnWhatsApp por instância.
+	// PN->LID mapping in the library store). Without it SendMessage forces PN->LID and fails with
+	// "no LID found ... from server" when the LID is not cached. Handles @lid/@g.us. Inside the
+	// lock, like the text send, to serialize IsOnWhatsApp per instance.
 	chatJID, err := h.messageService.ResolveJID(c.Request.Context(), client, strings.TrimSpace(req.Chat))
 	if err != nil {
 		response.ErrorWithMessage(c, http.StatusBadRequest, "chat inválido")

@@ -13,15 +13,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// autoSaveContact ensures the recipient is present in the account's contact list (app state
-// critical_unblock_low) at send time. The state lives only in the account/local Store — it is not
-// mirrored to external systems.
-//
-// Flow (best-effort, does not block the send):
-//  1. if a named contact already exists in Store.Contacts (local read, no network) → nothing to do;
-//  2. an in-memory instance:jid cache covers the window between SendAppState and the app state echo
-//     coming back to the Store, avoiding a duplicate resend in that interval;
-//  3. per-instance throttle (1/s + jitter) to avoid emitting app state mutations in bursts.
+// autoSaveContact ensures the recipient is in the account's contact list (app state
+// critical_unblock_low) at send time. Best-effort and never blocks the send: a local Store read
+// short-circuits when the contact is already named, an in-memory cache covers the window until the
+// app state echo returns, and a per-instance throttle keeps mutations from going out in bursts.
 
 var (
 	// saveContactSeen marks instance:jid pairs already handled (avoids reprocessing before the app state echo).

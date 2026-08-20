@@ -113,8 +113,8 @@ func (h *Handler) updateInstance(c *gin.Context) {
 		callerID = "admin"
 	}
 
-	// Só envia o campo se ele veio no form: campo ausente preserva o valor atual,
-	// campo presente e vazio limpa (comportamento esperado do formulário).
+	// Only send the field when it came in the form: an absent field preserves the current value,
+	// a present but empty one clears it.
 	in := instance.UpdateInput{Name: name, OwnerUserID: callerID}
 	if v, ok := c.GetPostForm("webhook_url"); ok {
 		in.WebhookURL = ptr(strings.TrimSpace(v))

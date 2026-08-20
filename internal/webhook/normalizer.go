@@ -60,10 +60,9 @@ func (h *EventHandler) confirmJIDFromEvent(ctx context.Context, evt any) {
 	}
 }
 
-// resolvePNFromStore consulta o mapa LID→PN persistido localmente pelo whatsmeow
-// (tabela whatsmeow_lid_map, SQLite da sessão). É o fallback para quando o evento
-// chega sem SenderAlt/RecipientAlt — caso típico do retry de mensagem indecifrável,
-// que reentrega endereçada por LID e sem o par. Consulta local: zero superfície de ban.
+// resolvePNFromStore reads the LID→PN map whatsmeow persists locally (whatsmeow_lid_map, session
+// SQLite). Fallback for events without SenderAlt/RecipientAlt, typical of the undecryptable-message
+// retry, which redelivers addressed by LID. Local lookup, so no added ban surface.
 func (h *EventHandler) resolvePNFromStore(ctx context.Context, client *whatsmeow.Client, lid types.JID) types.JID {
 	if client == nil || client.Store == nil || client.Store.LIDs == nil {
 		return types.EmptyJID
@@ -78,10 +77,9 @@ func (h *EventHandler) resolvePNFromStore(ctx context.Context, client *whatsmeow
 	return pn
 }
 
-// lidForEvent devolve o LID do contato da conversa, esteja ele no Chat/Sender
-// (endereçamento por LID) ou no Alt (endereçamento por PN). Emitido SEMPRE que
-// conhecido — mesmo quando o PN foi resolvido — para que o consumidor possa
-// unificar o contato pela identidade estável e não só pelo telefone.
+// lidForEvent returns the contact's LID, whether it sits in Chat/Sender (LID addressing) or in Alt
+// (PN addressing). Always emitted when known, even after the PN was resolved, so the consumer can
+// unify the contact by stable identity rather than by phone number.
 func lidForEvent(info *types.MessageInfo) types.JID {
 	if info.Chat.Server == types.HiddenUserServer {
 		return info.Chat.ToNonAD()
@@ -99,8 +97,8 @@ func lidForEvent(info *types.MessageInfo) types.JID {
 	return types.EmptyJID
 }
 
-// nfString devolve a primeira chave presente como string. O paramsJson do NativeFlow
-// varia de nome entre plataformas e pode vir sem a chave.
+// nfString returns the first key present as a string. NativeFlow's paramsJson varies key names
+// across platforms and may omit them entirely.
 func nfString(m map[string]interface{}, keys ...string) string {
 	for _, k := range keys {
 		if v, ok := m[k].(string); ok && v != "" {
@@ -165,8 +163,8 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			} else if !evt.Info.IsFromMe && !evt.Info.SenderAlt.IsEmpty() && strings.Contains(evt.Info.SenderAlt.String(), "@s.whatsapp.net") {
 				chatJID = evt.Info.SenderAlt.String()
 			}
-			// Fallback: evento sem Alt (retry de mensagem indecifrável reentrega só o LID).
-			// O mapa LID→PN local já conhece o contato se ele já falou pelo telefone.
+			// Event without Alt (the undecryptable retry redelivers only the LID). The local LID→PN
+			// map already knows the contact if they ever spoke by phone.
 			if strings.Contains(chatJID, "@lid") {
 				if pn := h.resolvePNFromStore(ctx, client, evt.Info.Chat); !pn.IsEmpty() {
 					chatJID = pn.String()
@@ -191,13 +189,10 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		result["chatJID"] = chatJID
 		result["to"] = chatJID
 		result["addressingMode"] = string(evt.Info.AddressingMode)
-		// LID = identidade estável do contato. Emitido SEMPRE que conhecido, inclusive
-		// quando o PN foi resolvido: o consumidor grava waIdentity no contato do telefone
-		// e uma reentrega futura endereçada por LID casa no mesmo contato (rede de
-		// segurança contra conversa duplicada). Quando não há PN alcançável
-		// (contato username-only), o LID é a única chave. O @username é enriquecido
-		// à parte (evento Contact / IsOnWhatsApp no envio) — nunca via usync por
-		// mensagem, que somaria superfície de ban.
+		// The LID is the contact's stable identity, so it goes out even when the PN was resolved:
+		// the consumer stores it and a later LID-addressed redelivery matches the same contact,
+		// which is the guard against duplicated conversations. For username-only contacts it is the
+		// only key. The @username is enriched elsewhere, never via usync per message.
 		if lid := lidForEvent(&evt.Info); !lid.IsEmpty() {
 			result["lid"] = lid.String()
 		}
@@ -385,8 +380,8 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			inter["sections"] = secs
 			result["interactive"] = inter
 		} else if im := evt.Message.GetInteractiveMessage(); im != nil {
-			// Formato ATUAL de botões (NativeFlow). Os branches acima só cobrem os
-			// legados; sem este, a mensagem sai sem text/interactive e o consumidor descarta.
+			// Current button format (NativeFlow); the branches above only cover the legacy ones.
+			// Without this the message goes out with no text/interactive and the consumer drops it.
 			inter := map[string]interface{}{"kind": "buttons"}
 			if body := im.GetBody(); body != nil && body.GetText() != "" {
 				inter["text"] = body.GetText()
@@ -463,7 +458,6 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			result["interactive"] = inter
 		}
 
-		// --- Respostas do usuário ao clicar num botão/linha (recebimento) ---
 		if br := evt.Message.GetButtonsResponseMessage(); br != nil {
 			if br.GetSelectedDisplayText() != "" {
 				result["text"] = br.GetSelectedDisplayText()
@@ -487,8 +481,8 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			}
 			if nf := ir.GetNativeFlowResponseMessage(); nf != nil {
 				reply := map[string]interface{}{"name": nf.GetName(), "paramsJson": nf.GetParamsJSON()}
-				// No NativeFlow o Body costuma vir vazio: o rótulo clicado só existe
-				// dentro do paramsJson. Sem isto o clique do usuário se perde.
+				// On NativeFlow the Body usually arrives empty: the clicked label only exists inside
+				// paramsJson, so without this the user's click is lost.
 				var params map[string]interface{}
 				if raw := nf.GetParamsJSON(); raw != "" {
 					if err := json.Unmarshal([]byte(raw), &params); err != nil {
@@ -498,7 +492,7 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 				}
 				label := nfString(params, "display_text", "title", "selected_display_text", "text")
 				id := nfString(params, "id", "selected_id", "selected_row_id", "row_id")
-				// Body.text é o fallback canônico do rótulo e vale mesmo com paramsJson ilegível.
+				// Body.text is the canonical label fallback, valid even with unreadable paramsJson.
 				if label == "" {
 					if body := ir.GetBody(); body != nil {
 						label = body.GetText()

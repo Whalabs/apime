@@ -12,14 +12,11 @@ import (
 const reachoutNegTTL = 6 * time.Hour
 
 // reachoutNegCache implements the "smart" 463 block: GLOBAL on write, PER-CONNECTION on release.
-//
-//   - A contact that returns 463 is stored blocked for the instance that hit it. Because the
-//     scheduler/operator may switch connections to retry the same cold contact (the exact pattern
-//     that got a device 403-logged-out), each instance that hits 463 accumulates in the contact's
-//     set — so switching connection does not bypass the guard.
-//   - Release is per-connection: when the contact messages a given instance (inbound), only THAT
-//     instance is unblocked. This is correct, not just conservative — the tctoken is per-connection
-//     (each device has its own), so instance A still lacks the token even if the contact replied to B.
+// Each instance that hits 463 accumulates in the contact's set, so switching connections to retry
+// the same cold contact does not bypass the guard (that pattern is what got a device 403-logged
+// out). An inbound releases only the instance it arrived on, which is correct rather than merely
+// conservative: the tctoken is per-connection, so instance A still lacks it if the contact replied
+// to B.
 //
 // Key = "contactKey" (device-less PN via normalizeChatKey). Value = map[instanceID]expiry.
 var (

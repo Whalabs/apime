@@ -13,9 +13,9 @@ import (
 )
 
 // groupErrorStatus traduz o erro do whatsmeow para o status HTTP correspondente. Sem isso todo
-// erro de consulta a grupo vira 500, inclusive os que são do CLIENTE (grupo inexistente, ou a
-// instância não participa dele): o chamador não consegue distinguir "pedido inválido" de "servidor
-// com problema", e cada ocorrência ainda entra no Sentry como incidente.
+// group error becomes a 500, including the CLIENT's own (group does not exist, or the instance is
+// not a member): the caller cannot tell "bad request" from "server problem", and every occurrence
+// lands in Sentry as an incident.
 func groupErrorStatus(err error) int {
 	switch {
 	case errors.Is(err, whatsmeow.ErrNotInGroup), errors.Is(err, whatsmeow.ErrIQForbidden),
@@ -27,7 +27,7 @@ func groupErrorStatus(err error) int {
 		return http.StatusBadRequest
 	case errors.Is(err, whatsmeow.ErrIQRateOverLimit), errors.Is(err, whatsmeow.ErrIQResourceLimit):
 		return http.StatusTooManyRequests
-	// Socket caído ou IQ sem resposta: é temporário e retentável, não um bug do servidor.
+	// Socket down or IQ without answer: temporary and retryable, not a server bug.
 	case errors.Is(err, whatsmeow.ErrNotConnected), errors.Is(err, whatsmeow.ErrIQTimedOut),
 		errors.Is(err, whatsmeow.ErrIQServiceUnavailable):
 		return http.StatusServiceUnavailable

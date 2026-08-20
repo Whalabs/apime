@@ -42,10 +42,9 @@ type SendInput struct {
 	Quoted      string
 	Participant string
 	QuotedText  string
-	// QuotedFromMe: a mensagem citada foi enviada por NÓS. O chamador não tem como montar o
-	// Participant certo — em 1:1 o whatsmeow troca o destino por LID e assina com o nosso LID
-	// (send.go, ramo DefaultUserServer), então o telefone da instância não serve. Com esta flag
-	// quem resolve é ownJIDForChat, aqui dentro.
+	// QuotedFromMe: the quoted message was sent by US. The caller cannot build the right
+	// Participant, since on 1:1 whatsmeow swaps the target for LID and signs with our LID, so the
+	// instance phone number does not work. With this flag ownJIDForChat resolves it here.
 	QuotedFromMe      bool
 	MentionedJids     []string
 	MarkReadMessageID string
@@ -59,16 +58,15 @@ type SendInput struct {
 	Address           string
 }
 
-// ownJIDForChat devolve o JID com que NOSSAS mensagens aparecem naquele chat — é o que precisa
-// ir no ContextInfo.Participant ao citar mensagem própria.
+// ownJIDForChat returns the JID our own messages appear under in that chat, which is what
+// ContextInfo.Participant needs when quoting our own message.
 //
-// Espelha a escolha de ownID do whatsmeow em SendMessage (send.go): grupo em addressing LID e
-// qualquer 1:1 (o destino PN é trocado por LID antes do envio) assinam com o LID; só grupo em
-// modo PN legado assina com o telefone. Errar aqui é o mesmo que não mandar participant: o
-// cliente não casa a mensagem citada.
+// Mirrors whatsmeow's ownID choice in SendMessage: LID-addressed groups and any 1:1 sign with the
+// LID; only legacy PN-mode groups sign with the phone number. Getting it wrong is the same as
+// sending no participant: the client fails to match the quoted message.
 //
-// GetGroupInfo faz um IQ, mas popula o groupCache que o SendMessage logo em seguida consulta —
-// na prática não é roundtrip perdido. Só é chamado citando mensagem própria em grupo.
+// GetGroupInfo issues an IQ but populates the groupCache SendMessage reads right after, so it is
+// not a wasted round-trip. Only called when quoting our own message in a group.
 func (s *Service) ownJIDForChat(ctx context.Context, client *whatsmeow.Client, to types.JID) types.JID {
 	pn := client.Store.GetJID()
 	lid := client.Store.GetLID()
@@ -78,7 +76,7 @@ func (s *Service) ownJIDForChat(ctx context.Context, client *whatsmeow.Client, t
 	if to.Server == types.GroupServer {
 		info, err := client.GetGroupInfo(ctx, to)
 		if err != nil {
-			// Sem saber o modo do grupo, PN é o fallback seguro (era o comportamento legado).
+			// Without knowing the group mode, PN is the safe fallback (the legacy behavior).
 			s.log.Warn("Falha ao obter info do grupo para resolver o participant do quote",
 				zap.String("group", to.String()), zap.Error(err))
 			return pn
@@ -188,8 +186,8 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 
 	toJID, err := s.ResolveJID(ctx, client, input.To)
 	if err != nil {
-		// Sobem sem o prefixo do destinatário: o handler decide o status por eles, e manter o
-		// telefone fora do texto evita abrir uma issue nova por número no Sentry.
+		// Propagated without the recipient prefix: the handler picks the status from them, and
+		// keeping the phone number out of the text avoids one Sentry issue per number.
 		if errors.Is(err, ErrInvalidJID) || errors.Is(err, ErrRecipientLookupUnavailable) {
 			return model.Message{}, err
 		}
@@ -225,17 +223,29 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		}
 	}
 
-	// Espera da simulação de digitação. Roda em paralelo com o preparo da mensagem e é aguardada
-	// imediatamente antes do envio; sem presence (grupo, broadcast) não há o que esperar.
-	aguardarPresenca := func() {}
+	// Typing simulation wait. Runs in parallel with message preparation and is awaited right before
+	// sending; with no presence (group, broadcast) there is nothing to wait for.
+	waitPresence := func() {}
+	// Any early return between here and the send (invalid payload, upload failure, unsupported
+	// type) must stop the simulation: otherwise it keeps signaling "typing" for a message that will
+	// never go out. The request ctx alone is not enough — it is only canceled once the handler
+	// answers, and by then the contact already saw the indicator.
+	stopPresence := func() {}
+	// releasePresence always runs: context.WithCancel requires its cancel to be called on every
+	// path, including the successful one, or the child context stays registered on the parent.
+	releasePresence := func() {}
+	defer func() {
+		stopPresence()
+		releasePresence()
+	}()
 
 	if toJID.Server == types.DefaultUserServer || toJID.Server == types.HiddenUserServer {
 		hasSession, err := s.sessionMgr.HasSession(input.InstanceID, toJID)
 
-		// 1. Go online — só quando a marca anterior expirou. `available` é estado do cliente e
-		// permanece até ser trocado, então reenviar a cada mensagem era rede gasta para reafirmar
-		// o que já era verdade, e ainda reforçava o padrão de presença sempre-online.
-		if precisaAvailable(input.InstanceID) {
+		// 1. Go online — only when the previous mark expired. `available` is client state and
+		// holds until replaced, so resending it on every message was a wasted round-trip
+		// restating what was already true, and reinforced the always-online pattern.
+		if needsAvailable(input.InstanceID) {
 			_ = client.SendPresence(ctx, types.PresenceAvailable)
 		}
 
@@ -291,10 +301,10 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		}
 
 		// 3. Send typing/recording presence (audio shows "recording audio...")
-		// Reabrir o indicador que já está aberto (mensagens em sequência no mesmo chat) não muda
-		// nada do lado de quem recebe.
+		// Reopening an indicator that is already open (messages in sequence in the same chat)
+		// changes nothing on the receiving side.
 		media := presenceMediaType(input.Type)
-		if precisaComposing(input.InstanceID, toJID.String()) {
+		if needsComposing(input.InstanceID, toJID.String()) {
 			_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, media)
 		}
 
@@ -317,42 +327,49 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		// 5. Content-based dynamic delay
 		presenceDelay := calculatePresenceDelay(input)
 
-		// Familiaridade com o contato. `hasSession` sozinho é heurístico (olha o device 0 via
-		// ToNonAD, não o device real do contato — ex.: :80 em contatos LID), então dá falso
-		// positivo de "sessão nova" em conversa ativa. A inbound rastreada é o sinal confiável de
-		// que a conversa está aberta.
-		decorrido, temInbound := tempoDesdeUltimaInbound(input.InstanceID, toJID.String())
-		temInboundRecente := temInbound && decorrido < 30*time.Minute
-		presenceDelay = ajustarPorFamiliaridade(presenceDelay, temInboundRecente)
+		// Familiarity with the contact. hasSession alone is heuristic (it checks device 0 via
+		// ToNonAD, not the contact's real device — e.g. :80 on LID contacts), so it yields false
+		// "new session" positives on active conversations. The tracked inbound is the reliable
+		// signal that the conversation is open.
+		elapsed, hasInbound := timeSinceLastInbound(input.InstanceID, toJID.String())
+		recentInbound := hasInbound && elapsed < 30*time.Minute
+		presenceDelay = adjustForFamiliarity(presenceDelay, recentInbound)
 
-		// Freio dos primeiros segundos depois de conectar. Vale para os dois casos: voltar de uma
-		// reconexão despejando mensagens é padrão de automação, independente de quem é o contato.
-		presenceDelay = time.Duration(float64(presenceDelay) * fatorDeReconexao(time.Since(connectedAt), 60*time.Second))
+		// Brake for the first seconds after connecting: coming back from a reconnect dumping
+		// messages is an automation pattern, regardless of who the contact is.
+		presenceDelay = time.Duration(float64(presenceDelay) * reconnectFactor(time.Since(connectedAt), 60*time.Second))
 
-		// O tempo que o contato já esperou desde a mensagem dele CONTA como digitação. Sem isto, a
-		// espera era somada por cima de uma que já aconteceu, e o atendente que levou 40 s para
-		// responder fazia o cliente esperar mais 8.
-		if temInboundRecente {
-			presenceDelay = descontarEspera(presenceDelay, decorrido)
+		// The time the contact already waited since their message COUNTS as typing. Without this
+		// the delay was added on top of a wait that already happened.
+		if recentInbound {
+			presenceDelay = subtractElapsed(presenceDelay, elapsed)
 		}
 
 		s.log.Debug("presence delay calculado",
 			zap.String("type", input.Type),
 			zap.Duration("delay", presenceDelay),
-			zap.Duration("ja_esperou", decorrido),
-			zap.Bool("conversa_aberta", temInboundRecente),
-			zap.Bool("tem_sessao", err == nil && hasSession))
+			zap.Duration("already_waited", elapsed),
+			zap.Bool("open_conversation", recentInbound),
+			zap.Bool("has_session", err == nil && hasSession))
 
-		// O delay roda em paralelo com o preparo da mensagem (montagem do payload, upload de
-		// mídia): são os dois a mesma janela de tempo. Antes um começava só quando o outro
-		// terminava, e em mídia isso somava segundos sem mudar nada do que o contato vê.
-		// `aguardarPresenca` é chamado logo antes do envio.
-		presencaPronta := make(chan struct{})
+		// The delay runs in parallel with message preparation (payload assembly, media upload):
+		// both occupy the same window. Before, one only started when the other finished, which on
+		// media added seconds without changing anything the contact sees.
+		presenceCtx, cancelPresence := context.WithCancel(ctx)
+		releasePresence = cancelPresence
+		presenceDone := make(chan struct{})
 		go func() {
-			defer close(presencaPronta)
-			simulatePresenceDelay(ctx, client, toJID, media, presenceDelay)
+			defer close(presenceDone)
+			simulatePresenceDelay(presenceCtx, client, toJID, media, presenceDelay)
 		}()
-		aguardarPresenca = func() { <-presencaPronta }
+		waitPresence = func() { <-presenceDone }
+		// On an early return, cancel the simulation and close the indicator: the contact must not
+		// keep seeing "typing" for a message that was never sent.
+		stopPresence = func() {
+			cancelPresence()
+			<-presenceDone
+			forgetComposing(input.InstanceID, toJID.String())
+		}
 	}
 
 	var waMessage *waE2E.Message
@@ -364,10 +381,10 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		if quotedID != "" {
 			ctxInfo.StanzaID = proto.String(quotedID)
 
-			// O ContextInfo não tem campo FromMe (só StanzaID/Participant/QuotedMessage/RemoteJID):
-			// o Participant é o ÚNICO sinal de autoria. Citando mensagem nossa, ele tem de ser o
-			// nosso JID — mandar o do contato faz o cliente procurar a citada como mensagem dele,
-			// não achar, e cair no fallback (sem miniatura, sem pular pra original).
+			// ContextInfo has no FromMe field, so Participant is the ONLY authorship signal. When
+			// quoting our own message it must be our JID: sending the contact's makes the client
+			// look for the quote among their messages, miss it, and fall back (no thumbnail, no
+			// jump to the original).
 			if input.QuotedFromMe {
 				ctxInfo.Participant = proto.String(s.ownJIDForChat(ctx, client, toJID).ToNonAD().String())
 			} else if participant != "" {
@@ -686,8 +703,10 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 	maxRetries := 3
 	reachoutLocked := false
 
-	// Só aqui a espera se paga: tudo o que dava para preparar já foi preparado enquanto ela corria.
-	aguardarPresenca()
+	// Only here does the wait cost anything: everything that could be prepared already was, while
+	// it ran. From this point on the message does go out, so the deferred stop becomes a no-op.
+	waitPresence()
+	stopPresence = func() {}
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
@@ -811,9 +830,9 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		}
 	}
 
-	// `paused` fecha o indicador: o cache precisa esquecer, senão o próximo envio confiaria num
-	// "digitando" que não está mais aberto e enviaria sem sinal nenhum.
-	esqueceComposing(input.InstanceID, toJID.String())
+	// `paused` closes the indicator: the cache must forget, otherwise the next send would trust a
+	// "typing" that is no longer open and would send with no signal at all.
+	forgetComposing(input.InstanceID, toJID.String())
 	_ = client.SendChatPresence(ctx, toJID, types.ChatPresencePaused, presenceMediaType(input.Type))
 
 	if err != nil {
@@ -876,9 +895,9 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		s.log.Warn("erro ao atualizar status enviado no banco", zap.Error(err))
 	}
 
-	// `paused` fecha o indicador: o cache precisa esquecer, senão o próximo envio confiaria num
-	// "digitando" que não está mais aberto e enviaria sem sinal nenhum.
-	esqueceComposing(input.InstanceID, toJID.String())
+	// `paused` closes the indicator: the cache must forget, otherwise the next send would trust a
+	// "typing" that is no longer open and would send with no signal at all.
+	forgetComposing(input.InstanceID, toJID.String())
 	_ = client.SendChatPresence(ctx, toJID, types.ChatPresencePaused, presenceMediaType(input.Type))
 
 	return msg, nil

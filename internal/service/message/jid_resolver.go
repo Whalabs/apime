@@ -129,9 +129,9 @@ func (s *Service) ResolveJID(ctx context.Context, client *whatsmeow.Client, phon
 	s.log.Debug("Consultando IsOnWhatsApp", zap.String("phone", phone))
 	resp, err := client.IsOnWhatsApp(ctx, []string{phone})
 	if err != nil {
-		// A consulta usync depende do websocket. Se ele está caído (reconexão em curso), o número
-		// não foi reprovado: só não deu para checar. Marcamos como indisponibilidade temporária
-		// para o handler responder 503 (retentável) em vez de 500, e para não virar incidente.
+		// The usync query needs the websocket. If it is down (reconnect in progress) the number was
+		// not rejected, it just could not be checked: flag it as temporary unavailability so the
+		// handler answers a retryable 503 instead of a 500.
 		if isTransportDown(err) {
 			s.log.Warn("IsOnWhatsApp indisponível (socket caído) - envio adiado", zap.String("phone", phone), zap.Error(err))
 			return types.EmptyJID, fmt.Errorf("%w: %v", ErrRecipientLookupUnavailable, err)
