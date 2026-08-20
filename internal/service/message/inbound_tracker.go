@@ -32,7 +32,14 @@ type inboundEntry struct {
 
 var (
 	inboundTracker sync.Map // key: "instanceID:chatJID" → value: inboundEntry
-	cleanupOnce    sync.Once
+	// Momento da última mensagem recebida no chat, que sobrevive ao consumo do tracker.
+	//
+	// `popLastInbound` faz LoadAndDelete, porque o markread só deve acontecer uma vez. Mas o tempo
+	// desde a última mensagem do contato continua sendo necessário depois disso: é o que permite
+	// descontar do "digitando" a espera que o contato já teve. Sem esta marca, a segunda mensagem
+	// de uma sequência voltaria a simular a digitação inteira.
+	lastInboundAt sync.Map // key: "instanceID:chatJID" → value: time.Time
+	cleanupOnce   sync.Once
 )
 
 // TrackInbound stores the last inbound message ID for a given chat.
@@ -41,11 +48,27 @@ var (
 func TrackInbound(instanceID, chatJID, messageID, senderJID string) {
 	cleanupOnce.Do(startCleanupLoop)
 	key := instanceID + ":" + normalizeChatKey(chatJID)
+	agora := time.Now()
 	inboundTracker.Store(key, inboundEntry{
 		messageID: messageID,
 		senderJID: senderJID,
-		trackedAt: time.Now(),
+		trackedAt: agora,
 	})
+	lastInboundAt.Store(key, agora)
+}
+
+// tempoDesdeUltimaInbound diz há quanto tempo o contato falou pela última vez neste chat.
+// Segundo retorno falso quando não há registro (chat sem inbound conhecida nesta execução).
+func tempoDesdeUltimaInbound(instanceID, chatJID string) (time.Duration, bool) {
+	valor, ok := lastInboundAt.Load(instanceID + ":" + normalizeChatKey(chatJID))
+	if !ok {
+		return 0, false
+	}
+	quando, ok := valor.(time.Time)
+	if !ok {
+		return 0, false
+	}
+	return time.Since(quando), true
 }
 
 // popLastInbound returns and removes the last inbound message for a given chat.
@@ -89,6 +112,13 @@ func startCleanupLoop() {
 			inboundTracker.Range(func(key, val any) bool {
 				if now.Sub(val.(inboundEntry).trackedAt) > inboundTTL {
 					inboundTracker.Delete(key)
+				}
+				return true
+			})
+			// A marca de tempo tem o mesmo TTL: sem esta limpeza ela cresceria para sempre.
+			lastInboundAt.Range(func(key, val any) bool {
+				if quando, ok := val.(time.Time); ok && now.Sub(quando) > inboundTTL {
+					lastInboundAt.Delete(key)
 				}
 				return true
 			})

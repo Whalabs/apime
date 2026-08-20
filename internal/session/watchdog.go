@@ -7,6 +7,7 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 	"go.uber.org/zap"
 
+	"github.com/open-apime/apime/internal/service/message"
 	"github.com/open-apime/apime/internal/storage"
 	"github.com/open-apime/apime/internal/storage/model"
 )
@@ -59,6 +60,9 @@ func (w *Watchdog) HandleEvent(evt any) {
 	switch evt.(type) {
 	case *events.Disconnected:
 		w.log.Warn("watchdog: desconectado", zap.String("instance", w.instanceID))
+		// Presença sinalizada antes da queda não vale mais do outro lado: sem esquecer, o primeiro
+		// envio após reconectar confiaria num "online"/"digitando" que já não existe.
+		message.EsquecerPresencaDaInstancia(w.instanceID)
 		ctx := context.Background()
 		inst, err := w.repo.GetByID(ctx, w.instanceID)
 		if err == nil {
@@ -70,6 +74,9 @@ func (w *Watchdog) HandleEvent(evt any) {
 		}
 	case *events.Connected:
 		w.log.Info("watchdog: conectado", zap.String("instance", w.instanceID))
+		// Também aqui, e não só na queda: reconexão automática pode não passar por Disconnected, e
+		// confiar numa presença sinalizada na sessão anterior deixaria o contato sem indicador.
+		message.EsquecerPresencaDaInstancia(w.instanceID)
 		ctx := context.Background()
 		inst, err := w.repo.GetByID(ctx, w.instanceID)
 		if err == nil {

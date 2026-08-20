@@ -225,11 +225,19 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		}
 	}
 
+	// Espera da simulação de digitação. Roda em paralelo com o preparo da mensagem e é aguardada
+	// imediatamente antes do envio; sem presence (grupo, broadcast) não há o que esperar.
+	aguardarPresenca := func() {}
+
 	if toJID.Server == types.DefaultUserServer || toJID.Server == types.HiddenUserServer {
 		hasSession, err := s.sessionMgr.HasSession(input.InstanceID, toJID)
 
-		// 1. Go online
-		_ = client.SendPresence(ctx, types.PresenceAvailable)
+		// 1. Go online — só quando a marca anterior expirou. `available` é estado do cliente e
+		// permanece até ser trocado, então reenviar a cada mensagem era rede gasta para reafirmar
+		// o que já era verdade, e ainda reforçava o padrão de presença sempre-online.
+		if precisaAvailable(input.InstanceID) {
+			_ = client.SendPresence(ctx, types.PresenceAvailable)
+		}
 
 		// 2. Mark as read — auto-detect from inbound tracker or use explicit param
 		markMsgID := input.MarkReadMessageID
@@ -283,8 +291,12 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		}
 
 		// 3. Send typing/recording presence (audio shows "recording audio...")
+		// Reabrir o indicador que já está aberto (mensagens em sequência no mesmo chat) não muda
+		// nada do lado de quem recebe.
 		media := presenceMediaType(input.Type)
-		_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, media)
+		if precisaComposing(input.InstanceID, toJID.String()) {
+			_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, media)
+		}
 
 		// 4. Fetch devices for crypto warmup
 		s.log.Debug("buscando dispositivos do destinatário antes do envio",
@@ -304,21 +316,43 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 
 		// 5. Content-based dynamic delay
 		presenceDelay := calculatePresenceDelay(input)
-		// Treat as "new conversation" only when there is NO crypto session AND NO tracked inbound.
-		// hasSession alone is heuristic (it checks device 0 via ToNonAD, not the contact's real
-		// device — e.g. :80 on LID contacts), so it yields false positives for "new session" on
-		// active conversations. If the contact just messaged us (markMsgID != ""), this is a reply
-		// to an open conversation — don't start anything new nor add extra delay.
-		if err == nil && !hasSession && markMsgID == "" {
-			s.log.Info("Nova conversa detectada (sem sessão e sem inbound recente)...",
-				zap.String("instance_id", input.InstanceID),
-				zap.String("to", toJID.String()))
-			presenceDelay += time.Duration(1500+rand.Intn(1000)) * time.Millisecond
+
+		// Familiaridade com o contato. `hasSession` sozinho é heurístico (olha o device 0 via
+		// ToNonAD, não o device real do contato — ex.: :80 em contatos LID), então dá falso
+		// positivo de "sessão nova" em conversa ativa. A inbound rastreada é o sinal confiável de
+		// que a conversa está aberta.
+		decorrido, temInbound := tempoDesdeUltimaInbound(input.InstanceID, toJID.String())
+		temInboundRecente := temInbound && decorrido < 30*time.Minute
+		presenceDelay = ajustarPorFamiliaridade(presenceDelay, temInboundRecente)
+
+		// Freio dos primeiros segundos depois de conectar. Vale para os dois casos: voltar de uma
+		// reconexão despejando mensagens é padrão de automação, independente de quem é o contato.
+		presenceDelay = time.Duration(float64(presenceDelay) * fatorDeReconexao(time.Since(connectedAt), 60*time.Second))
+
+		// O tempo que o contato já esperou desde a mensagem dele CONTA como digitação. Sem isto, a
+		// espera era somada por cima de uma que já aconteceu, e o atendente que levou 40 s para
+		// responder fazia o cliente esperar mais 8.
+		if temInboundRecente {
+			presenceDelay = descontarEspera(presenceDelay, decorrido)
 		}
+
 		s.log.Debug("presence delay calculado",
 			zap.String("type", input.Type),
-			zap.Duration("delay", presenceDelay))
-		simulatePresenceDelay(ctx, client, toJID, media, presenceDelay)
+			zap.Duration("delay", presenceDelay),
+			zap.Duration("ja_esperou", decorrido),
+			zap.Bool("conversa_aberta", temInboundRecente),
+			zap.Bool("tem_sessao", err == nil && hasSession))
+
+		// O delay roda em paralelo com o preparo da mensagem (montagem do payload, upload de
+		// mídia): são os dois a mesma janela de tempo. Antes um começava só quando o outro
+		// terminava, e em mídia isso somava segundos sem mudar nada do que o contato vê.
+		// `aguardarPresenca` é chamado logo antes do envio.
+		presencaPronta := make(chan struct{})
+		go func() {
+			defer close(presencaPronta)
+			simulatePresenceDelay(ctx, client, toJID, media, presenceDelay)
+		}()
+		aguardarPresenca = func() { <-presencaPronta }
 	}
 
 	var waMessage *waE2E.Message
@@ -652,6 +686,9 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 	maxRetries := 3
 	reachoutLocked := false
 
+	// Só aqui a espera se paga: tudo o que dava para preparar já foi preparado enquanto ela corria.
+	aguardarPresenca()
+
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			backoff := time.Duration(math.Pow(2, float64(attempt))) * time.Second
@@ -774,6 +811,9 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		}
 	}
 
+	// `paused` fecha o indicador: o cache precisa esquecer, senão o próximo envio confiaria num
+	// "digitando" que não está mais aberto e enviaria sem sinal nenhum.
+	esqueceComposing(input.InstanceID, toJID.String())
 	_ = client.SendChatPresence(ctx, toJID, types.ChatPresencePaused, presenceMediaType(input.Type))
 
 	if err != nil {
@@ -836,6 +876,9 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		s.log.Warn("erro ao atualizar status enviado no banco", zap.Error(err))
 	}
 
+	// `paused` fecha o indicador: o cache precisa esquecer, senão o próximo envio confiaria num
+	// "digitando" que não está mais aberto e enviaria sem sinal nenhum.
+	esqueceComposing(input.InstanceID, toJID.String())
 	_ = client.SendChatPresence(ctx, toJID, types.ChatPresencePaused, presenceMediaType(input.Type))
 
 	return msg, nil
