@@ -1,6 +1,6 @@
 module github.com/open-apime/apime
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/caarlos0/env/v10 v10.0.0
@@ -57,7 +57,7 @@ require (
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.31 // indirect
 	go.mau.fi/libsignal v0.2.2 // indirect
-	go.mau.fi/util v0.10.0 // indirect
+	go.mau.fi/util v0.10.1-0.20260820140024-eb612d936fde // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
@@ -94,4 +94,4 @@ exclude (
 	github.com/gin-gonic/gin v1.11.0
 )
 
-replace go.mau.fi/whatsmeow => github.com/Whalabs/whatsmeow v0.0.0-20260817180556-258e04c89fbf
+replace go.mau.fi/whatsmeow => github.com/Whalabs/whatsmeow v0.0.0-20260822012009-ff15f4d23f41
