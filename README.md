@@ -27,4 +27,15 @@ Baseada na biblioteca [WhatsMeow](https://github.com/tulir/whatsmeow) com dashbo
 
 
 - **API Specification:** `openapi.yaml`
-- **Documentação:** docs/
+
+## Documentação
+
+| Doc | Assunto |
+|---|---|
+| [docs/dashboard.md](docs/dashboard.md) | interface web, autenticação e rotas de admin |
+| [docs/webhook-payloads.md](docs/webhook-payloads.md) | envelope, assinatura HMAC e os tipos de evento |
+| [docs/users.md](docs/users.md) | usuários e tokens |
+| [docs/media.md](docs/media.md) | mídia |
+| [docs/phone-numbers.md](docs/phone-numbers.md) | números e JIDs |
+| [docs/whatsapp-advanced.md](docs/whatsapp-advanced.md) | grupos, newsletters e privacidade |
+| [docs/health-check.md](docs/health-check.md) | health check |

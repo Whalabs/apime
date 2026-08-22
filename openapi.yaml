@@ -1,8 +1,17 @@
 openapi: 3.0.3
 info:
   title: ApiMe
-  version: "1.1.0"
-  description: API para orquestração de múltiplas instâncias.
+  version: "1.2.0"
+  description: |
+    API para orquestração de múltiplas instâncias de WhatsApp.
+
+    Autenticação: header `Authorization: Bearer <token>`, com três tipos de credencial
+    (userJwt, apiToken, instanceToken). O middleware valida em cascata e para no primeiro
+    que reconhecer o token.
+
+    Escopo: `instanceToken` só alcança a própria instância. As rotas de perfil
+    (`/instances/{id}/profile/*`, `/instances/{id}/business/*`) exigem `instanceToken` e
+    recusam os demais. As rotas `/users/*` exigem usuário com role admin.
 
 servers:
   - url: http://localhost:8080/api
@@ -56,14 +65,14 @@ paths:
     get:
       summary: Listar usuários
       tags: [Usuários]
-      security: [{bearerAuth: []}]
+      security: [{userJwt: []}, {apiToken: []}]  # exige role admin
       responses:
         "200":
           description: Lista de usuários
     post:
       summary: Criar usuário
       tags: [Usuários]
-      security: [{bearerAuth: []}]
+      security: [{userJwt: []}, {apiToken: []}]  # exige role admin
       requestBody:
         required: true
         content:
@@ -87,7 +96,7 @@ paths:
     delete:
       summary: Remover usuário
       tags: [Usuários]
-      security: [{bearerAuth: []}]
+      security: [{userJwt: []}, {apiToken: []}]  # exige role admin
       parameters:
         - $ref: "#/components/parameters/userId"
       responses:
@@ -98,7 +107,7 @@ paths:
     patch:
       summary: Alterar senha
       tags: [Usuários]
-      security: [{bearerAuth: []}]
+      security: [{userJwt: []}, {apiToken: []}]  # exige role admin
       parameters:
         - $ref: "#/components/parameters/userId"
       requestBody:
@@ -119,7 +128,7 @@ paths:
     post:
       summary: Rotacionar API token do usuário
       tags: [Usuários]
-      security: [{bearerAuth: []}]
+      security: [{userJwt: []}, {apiToken: []}]  # exige role admin
       parameters:
         - $ref: "#/components/parameters/userId"
       responses:
@@ -137,14 +146,14 @@ paths:
     get:
       summary: Listar instâncias
       tags: [Instâncias]
-      security: [{bearerAuth: []}]
+      security: [{userJwt: []}, {apiToken: []}]  # token de instância recebe 403}, {apiToken: []}, {instanceToken: []}]
       responses:
         "200":
           description: Lista de instâncias
     post:
       summary: Criar instância
       tags: [Instâncias]
-      security: [{bearerAuth: []}]
+      security: [{userJwt: []}, {apiToken: []}]  # token de instância recebe 403}, {apiToken: []}, {instanceToken: []}]
       requestBody:
         required: true
         content:
@@ -167,7 +176,7 @@ paths:
     get:
       summary: Detalhar instância
       tags: [Instâncias]
-      security: [{bearerAuth: []}]
+      security: [{userJwt: []}, {apiToken: []}, {instanceToken: []}]  # token de instância só lê a própria}, {apiToken: []}, {instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
       responses:
@@ -176,7 +185,7 @@ paths:
     put:
       summary: Atualizar instância
       tags: [Instâncias]
-      security: [{bearerAuth: []}]
+      security: [{userJwt: []}, {apiToken: []}]  # token de instância recebe 403}, {apiToken: []}, {instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
       requestBody:
@@ -197,7 +206,7 @@ paths:
     delete:
       summary: Remover instância
       tags: [Instâncias]
-      security: [{bearerAuth: []}]
+      security: [{userJwt: []}, {apiToken: []}]  # token de instância recebe 403}, {apiToken: []}, {instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
       responses:
@@ -208,7 +217,7 @@ paths:
     get:
       summary: Gerar QR Code
       tags: [Conexão]
-      security: [{bearerAuth: []}]
+      security: [{userJwt: []}, {apiToken: []}, {instanceToken: []}]  # token de instância só lê a própria}, {apiToken: []}, {instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
       responses:
@@ -219,7 +228,7 @@ paths:
     post:
       summary: Desconectar instância
       tags: [Conexão]
-      security: [{bearerAuth: []}]
+      security: [{userJwt: []}, {apiToken: []}, {instanceToken: []}]  # token de instância só desconecta a própria}, {apiToken: []}]  # token de instância recebe 403}, {apiToken: []}, {instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
       responses:
@@ -230,7 +239,7 @@ paths:
     post:
       summary: Rotacionar token da instância
       tags: [Instâncias]
-      security: [{bearerAuth: []}]
+      security: [{userJwt: []}, {apiToken: []}]  # token de instância recebe 403}, {apiToken: []}, {instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
       responses:
@@ -241,7 +250,7 @@ paths:
     post:
       summary: Enviar texto
       tags: [Mensagens]
-      security: [{bearerAuth: []}, {instanceToken: []}]
+      security: [{instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
       requestBody:
@@ -268,7 +277,7 @@ paths:
     post:
       summary: Enviar mídia (imagem ou vídeo)
       tags: [Mensagens]
-      security: [{bearerAuth: []}, {instanceToken: []}]
+      security: [{instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
       requestBody:
@@ -305,7 +314,7 @@ paths:
     post:
       summary: Enviar áudio
       tags: [Mensagens]
-      security: [{bearerAuth: []}, {instanceToken: []}]
+      security: [{instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
       requestBody:
@@ -342,7 +351,7 @@ paths:
     post:
       summary: Enviar documento
       tags: [Mensagens]
-      security: [{bearerAuth: []}, {instanceToken: []}]
+      security: [{instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
       requestBody:
@@ -397,7 +406,7 @@ paths:
     get:
       summary: Informações da instância conectada
       tags: [Conexão]
-      security: [{bearerAuth: []}, {instanceToken: []}]
+      security: [{instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
       responses:
@@ -408,7 +417,7 @@ paths:
     get:
       summary: Listar grupos que a instância faz parte
       tags: [WhatsApp]
-      security: [{bearerAuth: []}, {instanceToken: []}]
+      security: [{userJwt: []}, {apiToken: []}, {instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
       responses:
@@ -417,7 +426,7 @@ paths:
     post:
       summary: Criar grupo
       tags: [WhatsApp]
-      security: [{bearerAuth: []}, {instanceToken: []}]
+      security: [{userJwt: []}, {apiToken: []}, {instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
       requestBody:
@@ -438,22 +447,11 @@ paths:
         "200":
           description: Grupo criado
 
-  /instances/{id}/messages:
-    get:
-      summary: Listar mensagens enviadas
-      tags: [Mensagens]
-      security: [{bearerAuth: []}, {instanceToken: []}]
-      parameters:
-        - $ref: "#/components/parameters/instanceId"
-      responses:
-        "200":
-          description: Lista de mensagens
-
   /instances/{id}/profile/{jid}:
     get:
       summary: Obter perfil de contato
       tags: [Perfil]
-      security: [{bearerAuth: []}, {instanceToken: []}]
+      security: [{instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
         - name: jid
@@ -470,7 +468,7 @@ paths:
     get:
       summary: Obter perfil business
       tags: [Perfil]
-      security: [{bearerAuth: []}, {instanceToken: []}]
+      security: [{instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
         - name: jid
@@ -487,7 +485,7 @@ paths:
     get:
       summary: Obter foto de perfil
       tags: [Perfil]
-      security: [{bearerAuth: []}, {instanceToken: []}]
+      security: [{instanceToken: []}]
       parameters:
         - $ref: "#/components/parameters/instanceId"
         - name: jid
@@ -500,16 +498,964 @@ paths:
         "200":
           description: URL da foto de perfil
 
+  /instances/{id}/messages:
+    post:
+      summary: Enfileirar mensagem genérica
+      tags: [Mensagens]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, type, payload]
+              properties:
+                to:
+                  type: string
+                type:
+                  type: string
+                  description: Tipo da mensagem
+                payload:
+                  type: string
+                  description: Conteúdo serializado
+      responses:
+        "200":
+          description: Mensagem enfileirada
+    get:
+      summary: Listar mensagens da instância
+      tags: [Mensagens]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Lista de mensagens
+
+  /instances/{id}/messages/contact:
+    post:
+      summary: Enviar contato
+      tags: [Mensagens]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, displayName]
+              properties:
+                to:
+                  type: string
+                displayName:
+                  type: string
+                vcard:
+                  type: string
+                quoted:
+                  type: string
+                  description: ID da mensagem citada
+                quotedParticipant:
+                  type: string
+                quotedText:
+                  type: string
+                quotedFromMe:
+                  type: boolean
+                mentionedJids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Contato enviado
+
+  /instances/{id}/messages/location:
+    post:
+      summary: Enviar localização
+      tags: [Mensagens]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, latitude, longitude]
+              properties:
+                to:
+                  type: string
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+                name:
+                  type: string
+                address:
+                  type: string
+                quoted:
+                  type: string
+                quotedParticipant:
+                  type: string
+                quotedText:
+                  type: string
+                quotedFromMe:
+                  type: boolean
+      responses:
+        "200":
+          description: Localização enviada
+
+  /instances/{id}/events:
+    get:
+      summary: Histórico de eventos de conexão da instância
+      tags: [Instâncias]
+      security: [{userJwt: []}, {apiToken: []}, {instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Lista de eventos
+
+  /tokens:
+    get:
+      summary: Listar tokens de API do usuário
+      tags: [Tokens]
+      security: [{userJwt: []}, {apiToken: []}]
+      responses:
+        "200":
+          description: Lista de tokens
+    post:
+      summary: Criar token de API
+      tags: [Tokens]
+      security: [{userJwt: []}, {apiToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                expiresAt:
+                  type: string
+                  format: date-time
+      responses:
+        "201":
+          description: Token criado
+
+  /tokens/{tokenId}:
+    delete:
+      summary: Remover token de API
+      tags: [Tokens]
+      security: [{userJwt: []}, {apiToken: []}]
+      parameters:
+        - name: tokenId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Removido
+
+  /instances/{id}/whatsapp/check:
+    post:
+      summary: Verificar se um número tem WhatsApp
+      tags: [WhatsApp Contatos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+      responses:
+        "200":
+          description: Resultado
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/presence:
+    post:
+      summary: Definir presença no chat
+      tags: [WhatsApp Mensagens]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state]
+              properties:
+                to:
+                  type: string
+                state:
+                  type: string
+                  description: composing, paused, available ou unavailable
+      responses:
+        "200":
+          description: Enviada
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/contacts:
+    get:
+      summary: Listar contatos
+      tags: [WhatsApp Contatos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Lista
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/contacts/{jid}:
+    get:
+      summary: Detalhar contato
+      tags: [WhatsApp Contatos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: jid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Contato
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/userinfo/{jid}:
+    get:
+      summary: Informações públicas do usuário
+      tags: [WhatsApp Contatos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: jid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dados
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/messages/read:
+    post:
+      summary: Marcar mensagem como lida
+      tags: [WhatsApp Mensagens]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chat, message_id]
+              properties:
+                chat:
+                  type: string
+                message_id:
+                  type: string
+                sender:
+                  type: string
+                  description: Obrigatório em grupo
+                played:
+                  type: boolean
+                  description: Marca áudio como ouvido
+      responses:
+        "200":
+          description: Marcada
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/messages/delete:
+    post:
+      summary: Apagar mensagem para todos
+      tags: [WhatsApp Mensagens]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chat, message_id]
+              properties:
+                chat:
+                  type: string
+                message_id:
+                  type: string
+                sender:
+                  type: string
+      responses:
+        "200":
+          description: Apagada
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/messages/edit:
+    post:
+      summary: Editar mensagem enviada
+      tags: [WhatsApp Mensagens]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chat, message_id, text]
+              properties:
+                chat:
+                  type: string
+                message_id:
+                  type: string
+                text:
+                  type: string
+      responses:
+        "200":
+          description: Editada
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/messages/react:
+    post:
+      summary: Reagir a uma mensagem
+      tags: [WhatsApp Mensagens]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chat, message_id]
+              properties:
+                chat:
+                  type: string
+                message_id:
+                  type: string
+                emoji:
+                  type: string
+                  description: Vazio remove a reação
+                sender:
+                  type: string
+                from_me:
+                  type: boolean
+      responses:
+        "200":
+          description: Reagida
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/privacy:
+    get:
+      summary: Ler privacidade
+      tags: [WhatsApp Configurações]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Configurações
+        "403":
+          description: Token não é da instância, ou não é token de instância
+    post:
+      summary: Alterar uma configuração de privacidade
+      tags: [WhatsApp Configurações]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, value]
+              properties:
+                name:
+                  type: string
+                value:
+                  type: string
+      responses:
+        "200":
+          description: Alterada
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/chat-settings/{chat}:
+    get:
+      summary: Ler configurações do chat
+      tags: [WhatsApp Configurações]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: chat
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Configurações
+        "403":
+          description: Token não é da instância, ou não é token de instância
+    post:
+      summary: Alterar configurações do chat
+      tags: [WhatsApp Configurações]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: chat
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                muted_until:
+                  type: string
+                  description: Data ISO, ou nulo para desmutar
+      responses:
+        "200":
+          description: Alteradas
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/status:
+    post:
+      summary: Definir recado do perfil
+      tags: [WhatsApp Configurações]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+      responses:
+        "200":
+          description: Definido
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/disappearing-timer:
+    post:
+      summary: Definir timer padrão de mensagens efêmeras
+      tags: [WhatsApp Configurações]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seconds]
+              properties:
+                seconds:
+                  type: integer
+                  description: 0 desliga
+      responses:
+        "200":
+          description: Definido
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/status-privacy:
+    get:
+      summary: Ler privacidade do status
+      tags: [WhatsApp Configurações]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Configuração
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/upload:
+    post:
+      summary: Subir mídia para reuso
+      tags: [WhatsApp Mensagens]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [media_type, data_base64]
+              properties:
+                media_type:
+                  type: string
+                  description: image, video, audio ou document
+                data_base64:
+                  type: string
+      responses:
+        "200":
+          description: Enviada
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/qr/contact:
+    get:
+      summary: Obter o link de QR do próprio contato
+      tags: [WhatsApp Contatos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: revoke
+          in: query
+          schema:
+            type: boolean
+          description: Revoga o link anterior e gera outro
+      responses:
+        "200":
+          description: Link
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/qr/contact/resolve:
+    post:
+      summary: Resolver link de QR de contato
+      tags: [WhatsApp Contatos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+      responses:
+        "200":
+          description: Contato
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/qr/business-message/resolve:
+    post:
+      summary: Resolver link de mensagem de empresa
+      tags: [WhatsApp Contatos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+      responses:
+        "200":
+          description: Destino
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/groups:
+    get:
+      summary: Listar grupos
+      tags: [WhatsApp Grupos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      responses:
+        "200":
+          description: Lista
+        "403":
+          description: Token não é da instância, ou não é token de instância
+    post:
+      summary: Criar grupo
+      tags: [WhatsApp Grupos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                participants:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Criado
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/groups/{group}:
+    get:
+      summary: Detalhar grupo
+      tags: [WhatsApp Grupos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dados
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/groups/{group}/invite-link:
+    get:
+      summary: Obter link de convite
+      tags: [WhatsApp Grupos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Link
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/groups/resolve-invite:
+    post:
+      summary: Ler dados de um grupo pelo link
+      tags: [WhatsApp Grupos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [link]
+              properties:
+                link:
+                  type: string
+      responses:
+        "200":
+          description: Dados
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/groups/join:
+    post:
+      summary: Entrar em grupo por link
+      tags: [WhatsApp Grupos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [link]
+              properties:
+                link:
+                  type: string
+      responses:
+        "200":
+          description: Entrou
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/groups/{group}/leave:
+    post:
+      summary: Sair do grupo
+      tags: [WhatsApp Grupos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Saiu
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/groups/{group}/participants:
+    post:
+      summary: Adicionar, remover ou promover participantes
+      tags: [WhatsApp Grupos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, participants]
+              properties:
+                action:
+                  type: string
+                  description: add, remove, promote ou demote
+                participants:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Atualizados
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/groups/{group}/requests:
+    get:
+      summary: Listar pedidos de entrada
+      tags: [WhatsApp Grupos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista
+        "403":
+          description: Token não é da instância, ou não é token de instância
+    post:
+      summary: Aprovar ou rejeitar pedidos
+      tags: [WhatsApp Grupos]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, participants]
+              properties:
+                action:
+                  type: string
+                  description: approve ou reject
+                participants:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Processados
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/newsletters/{jid}/live-updates:
+    post:
+      summary: Assinar atualizações ao vivo
+      tags: [WhatsApp Newsletters]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: jid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Assinado
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/newsletters/{jid}/mark-viewed:
+    post:
+      summary: Marcar mensagens como vistas
+      tags: [WhatsApp Newsletters]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: jid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [server_ids]
+              properties:
+                server_ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Marcadas
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/newsletters/{jid}/reaction:
+    post:
+      summary: Reagir a mensagem de newsletter
+      tags: [WhatsApp Newsletters]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: jid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [server_id]
+              properties:
+                server_id:
+                  type: string
+                reaction:
+                  type: string
+                  description: Vazio remove
+                message_id:
+                  type: string
+      responses:
+        "200":
+          description: Reagida
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/newsletters/{jid}/message-updates:
+    post:
+      summary: Buscar atualizações de mensagens
+      tags: [WhatsApp Newsletters]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: jid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Atualizações
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
 components:
   securitySchemes:
+    userJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        JWT de sessão, obtido em POST /auth/login. Expira conforme JWT_EXP_HOURS.
+        Identifica um usuário (claim sub).
+    apiToken:
+      type: http
+      scheme: bearer
+      description: >
+        Token de integração, gerado por um admin em POST /users/{id}/token. Não expira.
+        Identifica o mesmo usuário do JWT, para uso servidor a servidor.
+    instanceToken:
+      type: http
+      scheme: bearer
+      description: >
+        Token com escopo de UMA instância, entregue na criação e trocável em
+        POST /instances/{id}/token/rotate. Só acessa a própria instância.
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-    instanceToken:
-      type: http
-      scheme: bearer
-      description: Token da instância
+      description: >
+        Depreciado, mantido para não quebrar quem já referencia este nome.
+        Use userJwt, apiToken ou instanceToken conforme o caso.
 
   parameters:
     instanceId:

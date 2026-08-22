@@ -434,6 +434,17 @@
         <h2>Documentação da API</h2>
         <p>API REST para integração com whatsmeow. Suporta envio de texto, mídia, áudios e documentos.</p>
         <p style="color:var(--muted);font-size:0.95rem;">Autenticação via Bearer token. Notificações em tempo real via webhooks.</p>
+        <h4 style="margin-top:1.5rem;">Os três tipos de token</h4>
+        <p class="endpoint-desc">Todos vão no header <code>Authorization: Bearer &lt;token&gt;</code>, e a API reconhece qual é. O que muda é o alcance de cada um.</p>
+        <table class="params-table">
+          <thead><tr><th>Token</th><th>De onde vem</th><th>Alcance</th></tr></thead>
+          <tbody>
+            <tr><td><code>$JWT_TOKEN</code></td><td><code>POST /auth/login</code></td><td>o usuário e as instâncias dele. Expira.</td></tr>
+            <tr><td><code>$API_TOKEN</code></td><td>gerado por um admin em <code>/dashboard/users</code></td><td>o mesmo do JWT, para uso servidor a servidor. Não expira.</td></tr>
+            <tr><td><code>$INSTANCE_TOKEN</code></td><td>criação da instância, ou <code>POST /instances/:id/token/rotate</code></td><td>apenas a própria instância.</td></tr>
+          </tbody>
+        </table>
+        <p class="endpoint-desc"><strong>Atenção:</strong> enviar mensagem, ler perfil e todas as ações de WhatsApp (grupos, contatos, privacidade, newsletters) exigem <code>$INSTANCE_TOKEN</code>. Token de usuário recebe 403 nessas rotas. Já criar, editar e remover instância exigem token de usuário, e recusam o de instância.</p>
         {{if eq .UserRole "admin"}}
         <div style="margin-top: 2rem;">
           <a href="/dashboard/docs/openapi" class="btn-copy-code" style="display: inline-flex; width: auto; color: var(--text); border-color: var(--border);">
@@ -856,14 +867,22 @@ curl -X POST {{.BaseURL}}/api/users \
           <h3>Eventos de Webhook</h3>
           <p class="endpoint-desc">Quando mensagens são recebidas ou eventos ocorrem, a API envia POST requests para o <code>webhook_url</code> configurado. Todos os eventos incluem assinatura HMAC-SHA256 no header <code>X-ApiMe-Signature</code> se <code>webhook_secret</code> estiver definido.</p>
           <h4>Tipos de Eventos</h4>
+          <p class="endpoint-desc" style="margin-bottom:0.75rem;">São 12 tipos entregues ao consumidor. Referência completa dos campos de cada payload em <code>docs/webhook-payloads.md</code>.</p>
           <table class="params-table">
             <thead><tr><th>Tipo</th><th>Descrição</th></tr></thead>
             <tbody>
               <tr><td><code>message</code></td><td>Mensagem recebida (texto, mídia, localização, contato, etc.)</td></tr>
               <tr><td><code>receipt</code></td><td>Confirmação de entrega/leitura de mensagens enviadas</td></tr>
               <tr><td><code>presence</code></td><td>Status online/offline de contatos</td></tr>
+              <tr><td><code>chat_presence</code></td><td>Contato digitando ou gravando áudio no chat</td></tr>
+              <tr><td><code>reaction</code></td><td>Reação adicionada ou removida de uma mensagem</td></tr>
+              <tr><td><code>contact_update</code></td><td>Contato sincronizado que trouxe o @username</td></tr>
               <tr><td><code>connected</code></td><td>Instância conectada ao WhatsApp</td></tr>
               <tr><td><code>disconnected</code></td><td>Instância desconectada do WhatsApp</td></tr>
+              <tr><td><code>temporary_ban</code></td><td>Conta restringida temporariamente, ou reach-out travado</td></tr>
+              <tr><td><code>restriction_lifted</code></td><td>Restrição anterior saiu e a conta voltou ao normal</td></tr>
+              <tr><td><code>contact_reachout_locked</code></td><td>Envio bloqueado para um contato específico (erro 463)</td></tr>
+              <tr><td><code>unknown</code></td><td>Evento ainda não mapeado pelo normalizador</td></tr>
             </tbody>
           </table>
         </div>
@@ -875,7 +894,7 @@ curl -X POST {{.BaseURL}}/api/users \
             <pre class="code-body">{
   "id": "uuid-do-evento",
   "instanceId": "uuid-da-instancia",
-  "type": "message|receipt|presence|connected|disconnected",
+  "type": "message|receipt|presence|chat_presence|reaction|...",
   "payload": { ... },
   "createdAt": "2024-03-20T..."
 }</pre>
@@ -1199,7 +1218,7 @@ curl -X POST {{.BaseURL}}/api/users \
         <div>
           <div class="endpoint-header">
             <span class="endpoint-badge badge-get">GET</span>
-            <span class="endpoint-path">/instances/:id/profile-pic/:jid</span>
+            <span class="endpoint-path">/instances/:id/profile/:jid/picture</span>
           </div>
           <h3>Foto de Perfil</h3>
           <p class="endpoint-desc">Retorna a URL da foto de perfil do número informado.</p>
@@ -1208,9 +1227,9 @@ curl -X POST {{.BaseURL}}/api/users \
           <div class="code-container">
             <div class="code-header">
               <span class="code-lang">cURL</span>
-              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances/{instanceId}/profile-pic/5511999999999 -H "Authorization: Bearer $INSTANCE_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances/{instanceId}/profile/5511999999999/picture -H "Authorization: Bearer $INSTANCE_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
             </div>
-            <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances/{instanceId}/profile-pic/5511999999999 \
+            <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances/{instanceId}/profile/5511999999999/picture \
   -H "Authorization: Bearer $INSTANCE_TOKEN"</pre>
           </div>
         </div>

@@ -1,3 +1,5 @@
+# Payloads de Webhook
+
 ## Estrutura Base
 ```json
 {
@@ -16,9 +18,31 @@
 Se um `webhook_secret` for definido na instância, o ApiMe envia um hash HMAC-SHA256 no header `X-ApiMe-Signature`.
 Para validar, gere o HMAC-SHA256 do corpo da requisição usando seu secret e compare com o header.
 
+O corpo assinado é o **corpo cru**, antes de qualquer parse de JSON. Validar sobre o objeto já
+parseado e reserializado quebra a assinatura.
+
 ---
 
 ## Tipos de Eventos
+
+São 12 tipos entregues ao consumidor. `ignore` existe no código mas é descartado antes da entrega.
+
+| Tipo | Quando |
+|---|---|
+| `message` | mensagem recebida ou enviada |
+| `receipt` | confirmação de entrega ou leitura |
+| `presence` | contato ficou online ou offline |
+| `chat_presence` | contato está digitando ou gravando |
+| `reaction` | reação a uma mensagem |
+| `contact_update` | contato sincronizado ganhou @username |
+| `connected` | instância conectou |
+| `disconnected` | instância desconectou ou deslogou |
+| `temporary_ban` | conta banida temporariamente, ou reach-out travado |
+| `restriction_lifted` | restrição anterior saiu |
+| `contact_reachout_locked` | envio bloqueado para um contato específico (463) |
+| `unknown` | evento não mapeado |
+
+---
 
 ### `message`
 Mensagem recebida (texto, imagem, áudio, vídeo, documento, sticker, contato ou localização).
@@ -37,6 +61,11 @@ Mensagem recebida (texto, imagem, áudio, vídeo, documento, sticker, contato ou
 | `mediaUrl`  | URL local para download da mídia (pré-baixada) |
 | `mimetype`  | Tipo MIME do arquivo                           |
 | `caption`   | Legenda (imagem/vídeo)                         |
+| `buttons`   | Botões, quando a mensagem é interativa (abaixo) |
+
+**Botões.** Cada item de `buttons` tem `id`, `label` e `type`, onde `type` vale `reply`, `url`,
+`copy` ou `call`. O de `url` traz `url`, o de `copy` traz `code`, e o de `call` traz `phone`.
+São tipos de **botão**, não de evento.
 
 ---
 
@@ -53,7 +82,7 @@ Confirmação de entrega ou leitura.
 ---
 
 ### `presence`
-Mudança de status online/offline.
+Mudanca de status online/offline.
 
 | Campo        | Descrição                      |
 |--------------|--------------------------------|
@@ -63,10 +92,87 @@ Mudança de status online/offline.
 
 ---
 
+### `chat_presence`
+Contato digitando ou gravando áudio dentro de um chat.
+
+| Campo     | Descrição                                  |
+|-----------|--------------------------------------------|
+| `from`    | JID de quem está digitando                 |
+| `chatJID` | JID do chat                                |
+| `state`   | `composing` ou `paused`                    |
+| `media`   | vazio para texto, `audio` para gravação    |
+
+---
+
+### `reaction`
+Reação adicionada ou removida de uma mensagem.
+
+---
+
+### `contact_update`
+Sincronização de contato que trouxe o @username do WhatsApp.
+
+| Campo      | Descrição                 |
+|------------|---------------------------|
+| `jid`      | JID do contato            |
+| `username` | @username do WhatsApp     |
+
+Só é emitido quando há username. Sem ele o evento vira `ignore` e não sai, para um sync completo
+de contatos não inundar o webhook.
+
+---
+
 ### `connected`
 A instância conectou ao WhatsApp.
 
 ---
 
 ### `disconnected`
-A instância desconectou do WhatsApp.
+A instância desconectou do WhatsApp. Em logout, traz `reason`.
+
+---
+
+### `temporary_ban`
+A conta foi restringida. Cobre dois casos, com o mesmo tipo de propósito: o consumidor que já
+trata `temporary_ban` cobre os dois de graça.
+
+| Campo             | Descrição                                                      |
+|-------------------|----------------------------------------------------------------|
+| `reason`          | motivo textual                                                 |
+| `code`            | código do servidor (463 no caso do reach-out timelock)          |
+| `active`          | `true` enquanto a restrição vale                               |
+| `restrictedUntil` | data RFC3339 de quando expira, quando o servidor informa       |
+| `enforcementType` | tipo de aplicação, quando informado                            |
+
+Sem este evento a restrição só aparecia no log do apime, e a conexão seguia "connected" no
+consumidor enquanto todo envio falhava.
+
+---
+
+### `restriction_lifted`
+A restrição anterior saiu e a conta voltou ao normal. Traz `active: false`. O consumidor devolve
+a conexao para `connected`.
+
+---
+
+### `contact_reachout_locked`
+O envio para **um contato específico** foi bloqueado (erro 463), tipicamente contato frio que
+ainda não iniciou conversa. Não restringe a conta inteira.
+
+| Campo    | Descrição                          |
+|----------|------------------------------------|
+| `to`     | JID do contato bloqueado           |
+| `reason` | `server returned error 463`        |
+| `detail` | explicação do bloqueio             |
+| `code`   | `463`                              |
+
+---
+
+### `unknown`
+Evento do whatsmeow que o normalizador ainda não mapeia. Serve para não perder sinal.
+
+---
+
+### `ignore` (interno)
+Não é entregue. O dispatcher descarta antes de enfileirar, para eventos que não interessam ao
+consumidor (mensagem indecifrável, sync de contato sem username).
