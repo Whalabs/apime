@@ -1485,6 +1485,127 @@ paths:
         "403":
           description: Token não é da instância, ou não é token de instância
 
+  /instances/{id}/whatsapp/broadcast-lists:
+    get:
+      summary: Listar listas de transmissão
+      tags: [WhatsApp Listas de Transmissão]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      description: >-
+        Devolve {"lists": [...]}, e cada item traz jid, name, participants
+        (pn e lid de cada destinatário), labelIds e updatedAt em RFC3339.
+        A lista é local do remetente: quem recebe vê uma conversa 1:1 comum e
+        nunca sabe que a lista existe. As listas vêm da sincronização de app
+        state com o celular, então uma lista criada no aparelho só aparece aqui
+        depois que o app state sincroniza. Não há como criar lista pela API.
+      responses:
+        "200":
+          description: Lista
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/whatsapp/broadcast-lists/{jid}:
+    get:
+      summary: Detalhar lista de transmissão
+      tags: [WhatsApp Listas de Transmissão]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - name: jid
+          in: path
+          required: true
+          schema:
+            type: string
+          description: JID completo (123@broadcast) ou só o id (123)
+      description: >-
+        Devolve o objeto da lista direto, com jid, name, participants, labelIds
+        e updatedAt. A lista só existe aqui depois da sincronização de app state
+        com o celular: antes disso, a resposta é 404.
+      responses:
+        "200":
+          description: Dados
+        "403":
+          description: Token não é da instância, ou não é token de instância
+        "404":
+          description: Lista não encontrada. Ela só aparece após a sincronização com o celular
+
+  /instances/{id}/stories/text:
+    post:
+      summary: Publicar story de texto
+      tags: [Stories]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - $ref: "#/components/parameters/idempotencyKey"
+      description: >-
+        Publica um story de texto. A audiência não é informada pelo chamador:
+        vale a configuração de privacidade de status da conta, consultável em
+        GET /instances/{id}/whatsapp/status-privacy. Não confundir com
+        POST /instances/{id}/whatsapp/status, que define o recado do perfil.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+      responses:
+        "409":
+          description: Requisição com a mesma Idempotency-Key ainda em andamento
+        "503":
+          description: Sessão não pronta. Nada foi enviado e a Idempotency-Key é liberada para nova tentativa
+        "422":
+          description: Idempotency-Key já usada com outro conteúdo
+        "200":
+          description: Publicado
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
+  /instances/{id}/stories/media:
+    post:
+      summary: Publicar story de imagem ou vídeo
+      tags: [Stories]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+        - $ref: "#/components/parameters/idempotencyKey"
+      description: >-
+        Publica um story de imagem ou vídeo. A audiência não é informada pelo
+        chamador: vale a configuração de privacidade de status da conta,
+        consultável em GET /instances/{id}/whatsapp/status-privacy.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [type, file]
+              properties:
+                type:
+                  type: string
+                  enum: [image, video]
+                file:
+                  type: string
+                  format: binary
+                caption:
+                  type: string
+                  description: Legenda (opcional)
+      responses:
+        "409":
+          description: Requisição com a mesma Idempotency-Key ainda em andamento
+        "503":
+          description: Sessão não pronta. Nada foi enviado e a Idempotency-Key é liberada para nova tentativa
+        "422":
+          description: Idempotency-Key já usada com outro conteúdo
+        "200":
+          description: Publicado
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
 components:
   securitySchemes:
     userJwt:

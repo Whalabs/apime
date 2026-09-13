@@ -28,6 +28,8 @@ func TestSendRoutesKeepTheirPaths(t *testing.T) {
 		"POST /api/instances/:id/messages/location",
 		"POST /api/instances/:id/messages/media",
 		"POST /api/instances/:id/messages/text",
+		"POST /api/instances/:id/stories/media",
+		"POST /api/instances/:id/stories/text",
 	}
 	sort.Strings(want)
 

@@ -424,6 +424,28 @@
         <a href="#prof-pic" class="nav-item">Foto de Perfil</a>
       </div>
     </div>
+
+    <div class="nav-group">
+      <div class="nav-group-header" onclick="toggleSidebarCategory(this)">
+        <h4>Listas de Transmissão</h4>
+        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </div>
+      <div class="nav-group-content">
+        <a href="#bcast-list" class="nav-item">Listar Listas</a>
+        <a href="#bcast-get" class="nav-item">Detalhe da Lista</a>
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-header" onclick="toggleSidebarCategory(this)">
+        <h4>Stories (Status)</h4>
+        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </div>
+      <div class="nav-group-content">
+        <a href="#story-text" class="nav-item">Story de Texto</a>
+        <a href="#story-media" class="nav-item">Story de Mídia</a>
+      </div>
+    </div>
   </aside>
 
 
@@ -1231,6 +1253,131 @@ curl -X POST {{.BaseURL}}/api/users \
             </div>
             <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances/{instanceId}/profile/5511999999999/picture \
   -H "Authorization: Bearer $INSTANCE_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <section id="bcast-list" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-get">GET</span>
+            <span class="endpoint-path">/instances/:id/whatsapp/broadcast-lists</span>
+          </div>
+          <h3>Listar Listas de Transmissão</h3>
+          <p class="endpoint-desc">Retorna as listas de transmissão da conta, sincronizadas do celular via app state. Cada item traz <code>jid</code>, <code>name</code>, <code>participants</code> (com <code>pn</code> e <code>lid</code>), <code>labelIds</code> e <code>updatedAt</code>.</p>
+          <p class="endpoint-desc">A lista de transmissão é local do remetente: quem recebe vê uma conversa 1:1 normal e nunca sabe que a lista existe. Não é possível criar lista pela API, ela nasce no celular.</p>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances/{instanceId}/whatsapp/broadcast-lists -H "Authorization: Bearer $INSTANCE_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances/{instanceId}/whatsapp/broadcast-lists \
+  -H "Authorization: Bearer $INSTANCE_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <section id="bcast-get" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-get">GET</span>
+            <span class="endpoint-path">/instances/:id/whatsapp/broadcast-lists/:jid</span>
+          </div>
+          <h3>Detalhe da Lista</h3>
+          <p class="endpoint-desc">Retorna uma lista específica com seus participantes. Responde <code>404</code> quando a lista ainda não sincronizou do celular.</p>
+          <table class="params-table">
+            <thead><tr><th>Path</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr><td><span class="param-name">jid</span><span class="param-required">*</span></td><td>JID completo (<code>123@broadcast</code>) ou apenas o id (<code>123</code>)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X GET {{.BaseURL}}/api/instances/{instanceId}/whatsapp/broadcast-lists/123@broadcast -H "Authorization: Bearer $INSTANCE_TOKEN"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X GET {{.BaseURL}}/api/instances/{instanceId}/whatsapp/broadcast-lists/123@broadcast \
+  -H "Authorization: Bearer $INSTANCE_TOKEN"</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <section id="story-text" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-post">POST</span>
+            <span class="endpoint-path">/instances/:id/stories/text</span>
+          </div>
+          <h3>Story de Texto</h3>
+          <p class="endpoint-desc">Publica um story de texto. A audiência não é passada no body: ela vem da privacidade de status da conta, consultável em <code>GET /whatsapp/status-privacy</code>.</p>
+          <p class="endpoint-desc"><strong>Atenção:</strong> isso é diferente de <code>POST /whatsapp/status</code>, que altera o recado do perfil, o texto do "sobre".</p>
+          <table class="params-table">
+            <thead><tr><th>Body (JSON)</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr><td><span class="param-name">text</span><span class="param-required">*</span></td><td>Conteúdo do story (UTF-8)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" onclick="window.copyToClipboard(null, this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X POST {{.BaseURL}}/api/instances/{instanceId}/stories/text \
+  -H "Authorization: Bearer $INSTANCE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Olá do ApiMe!"
+  }'</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <section id="story-media" class="endpoint-section">
+      <div class="split-view">
+        <div>
+          <div class="endpoint-header">
+            <span class="endpoint-badge badge-post">POST</span>
+            <span class="endpoint-path">/instances/:id/stories/media</span>
+          </div>
+          <h3>Story de Mídia</h3>
+          <p class="endpoint-desc">Publica um story de imagem ou vídeo via <code>multipart/form-data</code>. A audiência vem da privacidade de status da conta, consultável em <code>GET /whatsapp/status-privacy</code>.</p>
+          <table class="params-table">
+            <thead><tr><th>Campo</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr><td><span class="param-name">type</span><span class="param-required">*</span></td><td><code>image</code> ou <code>video</code></td></tr>
+              <tr><td><span class="param-name">file</span><span class="param-required">*</span></td><td>Binário do arquivo</td></tr>
+              <tr><td><span class="param-name">caption</span></td><td>Legenda opcional</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="code-container">
+            <div class="code-header">
+              <span class="code-lang">cURL</span>
+              <button class="btn-copy-code" data-code='curl -X POST {{.BaseURL}}/api/instances/{instanceId}/stories/media -H "Authorization: Bearer $INSTANCE_TOKEN" -F "type=image" -F "file=@/fotos/exemplo.png" -F "caption=Confira este story!"' onclick="window.copyToClipboard(this.getAttribute('data-code'), this)">Copiar</button>
+            </div>
+            <pre class="code-body">curl -X POST {{.BaseURL}}/api/instances/{instanceId}/stories/media \
+  -H "Authorization: Bearer $INSTANCE_TOKEN" \
+  -F "type=image" \
+  -F "file=@/fotos/exemplo.png" \
+  -F "caption=Confira este story!"</pre>
           </div>
         </div>
       </div>

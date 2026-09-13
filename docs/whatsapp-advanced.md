@@ -205,6 +205,24 @@ POST /api/instances/{id}/whatsapp/newsletters/{jid}/message-updates
 
 ---
 
+## Listas de Transmissão
+
+A lista é local do remetente: quem recebe vê uma conversa 1:1 comum e nunca sabe que a lista existe.
+
+### Listar Listas de Transmissão
+```
+GET /api/instances/{id}/whatsapp/broadcast-lists
+```
+**Nota:** Cada item traz `jid`, `name`, `participants` (`pn` e `lid` de cada destinatário), `labelIds` e `updatedAt` em RFC3339. As listas vêm da sincronização de app state com o celular, então uma lista criada no aparelho só aparece aqui depois que o app state sincroniza. Não há como criar lista pela API.
+
+### Obter Lista de Transmissão
+```
+GET /api/instances/{id}/whatsapp/broadcast-lists/{jid}
+```
+**Nota:** Aceita o JID completo (`123@broadcast`) ou só o id (`123`). Retorna 404 enquanto a lista não tiver chegado pela sincronização com o celular.
+
+---
+
 ## Upload de Mídia
 
 ### Upload Direto

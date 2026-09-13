@@ -769,10 +769,15 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 				zap.String("to", toJID.String()))
 			time.Sleep(backoff)
 
-			_ = client.SendPresence(ctx, types.PresenceAvailable)
-			_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, presenceMediaType(input.Type))
+			// Same gate as the first attempt: a group, a broadcast list or a status post has no
+			// chat presence, and typing toward a JID that cannot receive it is exactly the
+			// anomalous traffic the anti-ban machinery exists to avoid.
+			if toJID.Server == types.DefaultUserServer || toJID.Server == types.HiddenUserServer {
+				_ = client.SendPresence(ctx, types.PresenceAvailable)
+				_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, presenceMediaType(input.Type))
 
-			_, _ = client.GetUserDevices(ctx, []types.JID{toJID})
+				_, _ = client.GetUserDevices(ctx, []types.JID{toJID})
+			}
 		}
 
 		resp, err = client.SendMessage(ctx, toJID, waMessage)

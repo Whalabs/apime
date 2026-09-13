@@ -64,6 +64,17 @@ Mensagem recebida (texto, imagem, áudio, vídeo, documento, sticker, contato ou
 | `buttons`   | Botões, quando a mensagem é interativa (abaixo) |
 | `editedMessageId` | Id da mensagem **original**, quando este evento é uma edição (abaixo) |
 | `editedText` | Novo texto da mensagem editada |
+| `isBroadcast` | `true` quando a mensagem vem de ou vai para lista de transmissão. Só presente nesse caso (abaixo) |
+| `isStatusBroadcast` | `true` quando é story/status, e não lista de transmissão |
+| `broadcastListOwner` | JID de quem enviou pela lista, quando informado |
+| `broadcastRecipients` | Array de `{pn, lid}` com **todos** os destinatários da lista |
+
+**Lista de transmissão.** A lista é local do remetente: quem recebe vê uma conversa 1:1 comum e
+nunca sabe que a lista existe. **O WhatsApp emite UM evento para a lista inteira, não um por
+destinatário.** Então o consumidor precisa fazer fanout por `broadcastRecipients` e registrar a
+mensagem em cada conversa 1:1, uma por destinatário. Tratar o evento como uma mensagem só deixa a
+conversa de todo mundo, menos a do primeiro, sem o registro. `isStatusBroadcast: true` separa o
+caso de story/status, que não tem lista e não pede fanout.
 
 **Edição de mensagem.** O WhatsApp entrega edição como `secretEncryptedMessage` com
 `SecretEncType = MESSAGE_EDIT`, não mais como `protocolMessage` tipo 14. O apime decifra e expõe

@@ -54,6 +54,8 @@ func (h *Handler) Register(r *gin.RouterGroup) {
 	r.GET("/instances/:id/whatsapp/groups/:group/requests", h.listGroupJoinRequests)
 	r.POST("/instances/:id/whatsapp/groups/:group/requests", h.updateGroupJoinRequests)
 	r.GET("/instances/:id/whatsapp/status-privacy", h.getStatusPrivacy)
+	r.GET("/instances/:id/whatsapp/broadcast-lists", h.listBroadcastLists)
+	r.GET("/instances/:id/whatsapp/broadcast-lists/:jid", h.getBroadcastList)
 	r.POST("/instances/:id/whatsapp/newsletters/:jid/live-updates", h.newsletterSubscribeLiveUpdates)
 	r.POST("/instances/:id/whatsapp/newsletters/:jid/mark-viewed", h.newsletterMarkViewed)
 	r.POST("/instances/:id/whatsapp/newsletters/:jid/reaction", h.newsletterSendReaction)

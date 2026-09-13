@@ -198,6 +198,19 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		}
 		result["isFromMe"] = evt.Info.IsFromMe
 		result["isGroup"] = evt.Info.IsGroup
+		// Broadcast list: one event carries every recipient, and the message reaches each of them as
+		// a normal 1:1 chat. Without these fields the consumer only sees a chatJID it cannot deliver
+		// to, since isGroup is false and the list JID is not a real conversation.
+		if evt.Info.Chat.Server == types.BroadcastServer {
+			result["isBroadcast"] = true
+			result["isStatusBroadcast"] = evt.Info.Chat == types.StatusBroadcastJID
+			if owner := evt.Info.BroadcastListOwner; !owner.IsEmpty() {
+				result["broadcastListOwner"] = owner.String()
+			}
+			if recipients := broadcastRecipients(evt.Info.BroadcastRecipients); len(recipients) > 0 {
+				result["broadcastRecipients"] = recipients
+			}
+		}
 		result["messageId"] = evt.Info.ID
 		result["timestamp"] = evt.Info.Timestamp
 		result["pushName"] = evt.Info.PushName

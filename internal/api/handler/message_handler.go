@@ -55,6 +55,8 @@ func (h *MessageHandler) Register(r *gin.RouterGroup) {
 	send.POST("/instances/:id/messages/document", h.sendDocument)
 	send.POST("/instances/:id/messages/contact", h.sendContact)
 	send.POST("/instances/:id/messages/location", h.sendLocation)
+	send.POST("/instances/:id/stories/text", h.sendStoryText)
+	send.POST("/instances/:id/stories/media", h.sendStoryMedia)
 
 	// Listing is already idempotent by definition.
 	r.GET("/instances/:id/messages", h.list)
