@@ -90,8 +90,13 @@ func (h *Handler) getBroadcastList(c *gin.Context) {
 		return
 	}
 	info, err := client.GetBroadcastListInfo(c.Request.Context(), jid)
-	if errors.Is(err, whatsmeow.ErrBroadcastListNotFound) {
+	// A list that never synced, or one whose participants did not resolve, is a legitimate state of
+	// the account rather than a server fault, so neither is a 500.
+	if errors.Is(err, whatsmeow.ErrBroadcastListNotFound) || errors.Is(err, whatsmeow.ErrBroadcastListEmpty) {
 		response.ErrorWithMessage(c, http.StatusNotFound, "lista não encontrada, ela só aparece após a sincronização com o celular")
+		return
+	} else if errors.Is(err, whatsmeow.ErrBroadcastListUnsupported) {
+		response.ErrorWithMessage(c, http.StatusServiceUnavailable, "listas de transmissão indisponíveis nesta instância")
 		return
 	} else if err != nil {
 		response.Error(c, http.StatusInternalServerError, err)

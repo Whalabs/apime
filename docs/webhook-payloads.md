@@ -66,8 +66,8 @@ Mensagem recebida (texto, imagem, áudio, vídeo, documento, sticker, contato ou
 | `editedText` | Novo texto da mensagem editada |
 | `isBroadcast` | `true` quando a mensagem vem de ou vai para lista de transmissão. Só presente nesse caso (abaixo) |
 | `isStatusBroadcast` | `true` quando é story/status, e não lista de transmissão |
-| `broadcastListOwner` | JID de quem enviou pela lista, quando informado |
-| `broadcastRecipients` | Array de `{pn, lid}` com **todos** os destinatários da lista |
+| `broadcastListOwner` | JID de quem enviou pela lista. É o campo das mensagens **recebidas** |
+| `broadcastRecipients` | Array de `{pn, lid}` com todos os destinatários. Só nas mensagens **enviadas** por você |
 
 **Lista de transmissão.** A lista é local do remetente: quem recebe vê uma conversa 1:1 comum e
 nunca sabe que a lista existe. **O WhatsApp emite UM evento para a lista inteira, não um por
@@ -75,6 +75,18 @@ destinatário.** Então o consumidor precisa fazer fanout por `broadcastRecipien
 mensagem em cada conversa 1:1, uma por destinatário. Tratar o evento como uma mensagem só deixa a
 conversa de todo mundo, menos a do primeiro, sem o registro. `isStatusBroadcast: true` separa o
 caso de story/status, que não tem lista e não pede fanout.
+
+**Os dois sentidos trazem campos diferentes.** `broadcastRecipients` só vem quando a mensagem é
+sua (`isFromMe: true`), porque é o único caso em que o WhatsApp informa a lista de destinatários.
+Numa mensagem **recebida** por uma lista de terceiro o array não vem, e quem identifica a conversa
+é `from` junto de `broadcastListOwner`. Fanout, portanto, só no sentido de saída.
+
+**`isGroup` também vem `true` aqui.** O whatsmeow trata lista e grupo no mesmo ramo, então quem
+decide pelo `isGroup` primeiro cai no caminho de grupo. Para separar, teste `isBroadcast` antes.
+
+**O mesmo `messageId` em todos.** O WhatsApp gera um id só para a lista inteira, então as N cópias
+do fanout repetem esse valor. Quem tiver unicidade por `messageId` precisa compor a chave com o
+destinatário, ou perde todas as cópias menos a primeira.
 
 **Edição de mensagem.** O WhatsApp entrega edição como `secretEncryptedMessage` com
 `SecretEncType = MESSAGE_EDIT`, não mais como `protocolMessage` tipo 14. O apime decifra e expõe

@@ -205,9 +205,22 @@ POST /api/instances/{id}/whatsapp/newsletters/{jid}/message-updates
 
 ---
 
+## App State
+
+### Ressincronizar App State
+```
+POST /api/instances/{id}/whatsapp/appstate/resync
+Body: { "collections": ["critical_unblock_low", "regular"] }
+```
+**Nota:** Sem corpo, ressincroniza `critical_unblock_low` (a agenda, que define quem vê um story) e `regular` (as listas de transmissão). Serve para reparar uma coleção que divergiu do servidor, o erro `mismatching LTHash`: o whatsmeow reporta uma vez e para de aplicar patches naquela coleção, sem tentar de novo sozinho, o que degrada em silêncio tudo que depende dela. A apime já dispara essa reparação automaticamente quando uma sincronização falha, então esta rota é a saída manual. Exige a instância conectada. A resposta traz `resynced` e `skipped`: uma coleção ressincronizada nos últimos 15 minutos entra em `skipped` em vez de sincronizar de novo, o que limita a frequência com que um snapshot inteiro é puxado do WhatsApp. Chamar duas vezes seguidas responde 200 com `resynced` vazio, e isso é resultado normal, não falha.
+
+---
+
 ## Listas de Transmissão
 
 A lista é local do remetente: quem recebe vê uma conversa 1:1 comum e nunca sabe que a lista existe.
+
+**Importante:** apenas contas **WhatsApp Business** sincronizam listas para dispositivos conectados. Numa conta pessoal a listagem devolve vazio, e não há como contornar: o WhatsApp não envia listas de transmissão para dispositivo companheiro.
 
 ### Listar Listas de Transmissão
 ```

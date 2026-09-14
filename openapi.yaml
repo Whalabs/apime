@@ -1485,6 +1485,57 @@ paths:
         "403":
           description: Token não é da instância, ou não é token de instância
 
+  /instances/{id}/whatsapp/appstate/resync:
+    post:
+      summary: Ressincronizar app state
+      description: >
+        Descarta a cópia local das coleções informadas e baixa um snapshot novo do WhatsApp.
+        Repara uma coleção que divergiu do servidor (mismatching LTHash), caso em que o whatsmeow
+        para de aplicar patches e não tenta de novo sozinho. Sem corpo, ressincroniza
+        critical_unblock_low (a agenda, que define quem vê um story) e regular (as listas de
+        transmissão). A apime também faz isso sozinha quando uma sincronização falha, com intervalo
+        mínimo entre tentativas, então esta rota é a saída manual.
+      tags: [WhatsApp]
+      security: [{instanceToken: []}]
+      parameters:
+        - $ref: "#/components/parameters/instanceId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                collections:
+                  type: array
+                  items:
+                    type: string
+                    enum: [critical_block, critical_unblock_low, regular, regular_high, regular_low]
+      responses:
+        "200":
+          description: >-
+            Ressincronizado. Devolve resynced e skipped: uma coleção ressincronizada nos
+            últimos 15 minutos entra em skipped em vez de sincronizar de novo, o que limita
+            a frequência com que um snapshot inteiro é puxado do WhatsApp. Chamar duas vezes
+            seguidas responde 200 com resynced vazio, e isso é resultado normal, não falha.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resynced:
+                    type: array
+                    items:
+                      type: string
+                  skipped:
+                    type: array
+                    items:
+                      type: string
+        "400":
+          description: Coleção inválida, ou instância não conectada
+        "403":
+          description: Token não é da instância, ou não é token de instância
+
   /instances/{id}/whatsapp/broadcast-lists:
     get:
       summary: Listar listas de transmissão
@@ -1553,6 +1604,21 @@ paths:
               properties:
                 text:
                   type: string
+                backgroundArgb:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Cor de fundo do card, em ARGB opaco (ex: 4280427042 para 0xFF25D366).
+                    Omitido usa o verde do WhatsApp. Um story de texto sempre carrega fundo,
+                    então a apime define um de qualquer forma.
+                textArgb:
+                  type: integer
+                  format: int64
+                  description: Cor do texto, em ARGB opaco. Omitido usa branco.
+                font:
+                  type: string
+                  enum: [system, system_text, system_bold, fb_script, morningbreeze_regular, calistoga_regular, exo2_extrabold, courierprime_bold]
+                  description: Fonte do card. Valor desconhecido cai na fonte do sistema.
       responses:
         "409":
           description: Requisição com a mesma Idempotency-Key ainda em andamento

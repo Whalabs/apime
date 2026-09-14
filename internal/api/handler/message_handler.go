@@ -78,14 +78,25 @@ type messageRequest struct {
 	Payload string `json:"payload" binding:"required"`
 }
 
-func (h *MessageHandler) enqueue(c *gin.Context) {
+// requireInstanceToken guards a route that acts on a single instance: a user-wide JWT must not
+// reach it. The other send handlers in this file still inline the same two checks, which predates
+// this helper; they should move over in a refactor of their own, not mixed into a feature.
+func requireInstanceToken(c *gin.Context) (string, bool) {
 	instanceID := c.Param("id")
 	if c.GetString("authType") != "instance_token" {
 		response.ErrorWithMessage(c, http.StatusForbidden, "endpoint disponível apenas com token de instância")
-		return
+		return "", false
 	}
 	if c.GetString("instanceID") != instanceID {
 		response.ErrorWithMessage(c, http.StatusForbidden, "token inválido para esta instância")
+		return "", false
+	}
+	return instanceID, true
+}
+
+func (h *MessageHandler) enqueue(c *gin.Context) {
+	instanceID, ok := requireInstanceToken(c)
+	if !ok {
 		return
 	}
 	var req messageRequest

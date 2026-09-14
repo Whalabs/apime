@@ -1,6 +1,7 @@
 package whatsapp
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +18,13 @@ type Handler struct {
 
 type SessionManager interface {
 	GetClient(instanceID string) (*whatsmeow.Client, error)
+}
+
+// appStateResyncer is an optional extension of SessionManager: the real session manager implements
+// it, and the route type-asserts for it instead of widening the interface that every caller (tests
+// included) would then have to satisfy. The route answers 501 when it is absent.
+type appStateResyncer interface {
+	ResyncAppState(ctx context.Context, instanceID string, collections []string) (resynced, skipped []string, err error)
 }
 
 func NewHandler(sessionManager SessionManager, messageService *messageSvc.Service) *Handler {
@@ -54,6 +62,7 @@ func (h *Handler) Register(r *gin.RouterGroup) {
 	r.GET("/instances/:id/whatsapp/groups/:group/requests", h.listGroupJoinRequests)
 	r.POST("/instances/:id/whatsapp/groups/:group/requests", h.updateGroupJoinRequests)
 	r.GET("/instances/:id/whatsapp/status-privacy", h.getStatusPrivacy)
+	r.POST("/instances/:id/whatsapp/appstate/resync", h.resyncAppState)
 	r.GET("/instances/:id/whatsapp/broadcast-lists", h.listBroadcastLists)
 	r.GET("/instances/:id/whatsapp/broadcast-lists/:jid", h.getBroadcastList)
 	r.POST("/instances/:id/whatsapp/newsletters/:jid/live-updates", h.newsletterSubscribeLiveUpdates)

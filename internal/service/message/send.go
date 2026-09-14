@@ -54,8 +54,13 @@ type SendInput struct {
 	Contacts          []ContactEntry
 	Latitude          float64
 	Longitude         float64
-	LocationName      string
-	Address           string
+	// Status post styling. A text status is an ExtendedTextMessage carrying a background, and the
+	// official app always sets one, so these have defaults rather than being optional in practice.
+	BackgroundArgb uint32
+	TextArgb       uint32
+	Font           string
+	LocationName   string
+	Address        string
 }
 
 // ownJIDForChat returns the JID our own messages appear under in that chat, which is what
@@ -87,6 +92,24 @@ func (s *Service) ownJIDForChat(ctx context.Context, client *whatsmeow.Client, t
 		return pn
 	}
 	return lid
+}
+
+// hasChatPresence reports whether the destination accepts typing indicators. A group, a broadcast
+// list and a status post have none, so signaling toward them is traffic the real client never
+// produces, which is what the anti-ban machinery exists to avoid.
+func hasChatPresence(toJID types.JID) bool {
+	return toJID.Server == types.DefaultUserServer || toJID.Server == types.HiddenUserServer
+}
+
+// closeComposing sends `paused` to close the indicator opened before the send. The cache must
+// forget either way, otherwise the next send would trust a "typing" that is no longer open and
+// would go out with no signal at all.
+func closeComposing(ctx context.Context, client *whatsmeow.Client, input SendInput, toJID types.JID) {
+	forgetComposing(input.InstanceID, toJID.String())
+	if !hasChatPresence(toJID) {
+		return
+	}
+	_ = client.SendChatPresence(ctx, toJID, types.ChatPresencePaused, presenceMediaType(input.Type))
 }
 
 func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, error) {
@@ -425,7 +448,16 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		if input.Text == "" {
 			return model.Message{}, ErrInvalidPayload
 		}
-		if input.Quoted != "" || len(input.MentionedJids) > 0 {
+		if toJID == types.StatusBroadcastJID {
+			// A text status is never a bare Conversation: the official client always sends an
+			// ExtendedTextMessage with a background colour and a font, because the composer makes
+			// you pick one. Sending a plain Conversation here is a shape the recipient's client
+			// never sees from a real status, and older versions render it as "update WhatsApp to
+			// view this message" instead of showing the text.
+			waMessage = &waE2E.Message{
+				ExtendedTextMessage: buildStatusText(input),
+			}
+		} else if input.Quoted != "" || len(input.MentionedJids) > 0 {
 			waMessage = &waE2E.Message{
 				ExtendedTextMessage: &waE2E.ExtendedTextMessage{
 					Text:        proto.String(input.Text),
@@ -772,7 +804,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			// Same gate as the first attempt: a group, a broadcast list or a status post has no
 			// chat presence, and typing toward a JID that cannot receive it is exactly the
 			// anomalous traffic the anti-ban machinery exists to avoid.
-			if toJID.Server == types.DefaultUserServer || toJID.Server == types.HiddenUserServer {
+			if hasChatPresence(toJID) {
 				_ = client.SendPresence(ctx, types.PresenceAvailable)
 				_ = client.SendChatPresence(ctx, toJID, types.ChatPresenceComposing, presenceMediaType(input.Type))
 
@@ -887,10 +919,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		}
 	}
 
-	// `paused` closes the indicator: the cache must forget, otherwise the next send would trust a
-	// "typing" that is no longer open and would send with no signal at all.
-	forgetComposing(input.InstanceID, toJID.String())
-	_ = client.SendChatPresence(ctx, toJID, types.ChatPresencePaused, presenceMediaType(input.Type))
+	closeComposing(ctx, client, input, toJID)
 
 	if err != nil {
 		isDisconnectedErr := strings.Contains(err.Error(), "not logged in") ||
@@ -952,10 +981,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		s.log.Warn("erro ao atualizar status enviado no banco", zap.Error(err))
 	}
 
-	// `paused` closes the indicator: the cache must forget, otherwise the next send would trust a
-	// "typing" that is no longer open and would send with no signal at all.
-	forgetComposing(input.InstanceID, toJID.String())
-	_ = client.SendChatPresence(ctx, toJID, types.ChatPresencePaused, presenceMediaType(input.Type))
+	closeComposing(ctx, client, input, toJID)
 
 	return msg, nil
 }

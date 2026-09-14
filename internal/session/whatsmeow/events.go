@@ -350,14 +350,38 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 				zap.String("instance_id", instanceID))
 		}
 	case *events.AppStateSyncError:
-		// Non-critical: app-state patch failures (e.g. mismatching LTHash on regular_low, which only
-		// holds pin/archive settings) don't affect messaging or the crypto session, and whatsmeow
-		// recovers on the next full sync. Logged at warn to avoid Sentry noise.
-		m.log.Warn("app state sync falhou (não crítico)",
+		// Messaging and the crypto session are unaffected, so this is not fatal. But it is not
+		// harmless either: whatsmeow gives up on the collection after this, since incremental
+		// patches cannot be applied over a base the server disagrees with, and nothing retries on
+		// its own. A stale critical_unblock_low means an incomplete contact list, which is exactly
+		// what decides the audience of a status post.
+		m.log.Warn("app state sync falhou",
 			zap.String("instance_id", instanceID),
 			zap.String("name", string(v.Name)),
 			zap.Error(v.Error),
 		)
+		// A full sync that ITSELF failed must not trigger another one. whatsmeow fires this same
+		// event from inside the full sync, so repairing here would re-enter the repair, and the
+		// cooldown cannot be relied on to stop it: the failed attempt clears its own mark so a
+		// later retry is not barred, which leaves a window where the loop escapes. A full sync is
+		// already the strongest repair available, so if it failed, retrying now fixes nothing.
+		if v.FullSync {
+			break
+		}
+		// Repair it with a full sync, which refetches the snapshot instead of patching. Runs
+		// detached because this handler must not block on a network round trip, and is bounded by
+		// the cooldown in ResyncAppState.
+		go func(instanceID string, name string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			if _, _, err := m.ResyncAppState(ctx, instanceID, []string{name}); err != nil {
+				m.log.Warn("ressincronização automática de app state falhou",
+					zap.String("instance_id", instanceID),
+					zap.String("name", name),
+					zap.Error(err),
+				)
+			}
+		}(instanceID, string(v.Name))
 	case *events.StreamReplaced:
 		m.log.Warn("stream substituído pelo servidor - limpando cache de dispositivos",
 			zap.String("instance_id", instanceID))

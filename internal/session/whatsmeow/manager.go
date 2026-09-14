@@ -84,7 +84,8 @@ type Manager struct {
 	connectedAt        map[string]time.Time
 	messageRepo        storage.MessageRepository
 	sharedContainer    *sqlstore.Container
-	outgoingMsgCache   sync.Map // msgID -> outgoingMsgEntry, for retry of any type (including media)
+	outgoingMsgCache   sync.Map             // msgID -> outgoingMsgEntry, for retry of any type (including media)
+	appStateResync     map[string]time.Time // "<instanceID>:<collection>" -> last full sync
 }
 
 func NewManager(log *zap.Logger, encKey, storageDriver, baseDir, pgConnString string, instanceRepo storage.InstanceRepository, historySyncRepo storage.HistorySyncRepository, messageRepo storage.MessageRepository, eventLogRepo storage.EventLogRepository) *Manager {
