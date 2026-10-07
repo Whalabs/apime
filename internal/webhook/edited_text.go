@@ -56,7 +56,7 @@ func editedText(decrypted *waE2E.Message) string {
 	if text := msg.GetExtendedTextMessage().GetText(); text != "" {
 		return text
 	}
-	if text := msg.GetImageMessage().GetCaption(); text != "" {
+	if text := imageOf(msg).GetCaption(); text != "" {
 		return text
 	}
 	if text := msg.GetVideoMessage().GetCaption(); text != "" {
@@ -81,4 +81,13 @@ func messageFieldNames(msg *waE2E.Message) []string {
 		return true
 	})
 	return names
+}
+
+// imageOf returns the image carried by msg, including the instant image that newer clients send
+// in its own field (instantImageMessage) instead of imageMessage.
+func imageOf(msg *waE2E.Message) *waE2E.ImageMessage {
+	if img := msg.GetImageMessage(); img != nil {
+		return img
+	}
+	return msg.GetInstantImageMessage()
 }

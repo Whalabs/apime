@@ -117,3 +117,28 @@ func TestMessageFieldNamesListsNamesNotValues(t *testing.T) {
 		}
 	}
 }
+
+func TestImageOfReadsInstantImage(t *testing.T) {
+	regular := &waE2E.ImageMessage{Caption: proto.String("regular")}
+	instant := &waE2E.ImageMessage{Caption: proto.String("instant")}
+
+	if got := imageOf(&waE2E.Message{ImageMessage: regular}); got != regular {
+		t.Fatalf("imageOf(imageMessage) = %v, want the regular image", got)
+	}
+	if got := imageOf(&waE2E.Message{InstantImageMessage: instant}); got != instant {
+		t.Fatalf("imageOf(instantImageMessage) = %v, want the instant image", got)
+	}
+	if got := imageOf(&waE2E.Message{Conversation: proto.String("text")}); got != nil {
+		t.Fatalf("imageOf(text) = %v, want nil", got)
+	}
+	if got := imageOf(nil); got != nil {
+		t.Fatalf("imageOf(nil) = %v, want nil", got)
+	}
+}
+
+func TestEditedTextReadsInstantImageCaption(t *testing.T) {
+	edit := buildEdit(&waE2E.Message{InstantImageMessage: &waE2E.ImageMessage{Caption: proto.String("new caption")}})
+	if got := editedText(edit); got != "new caption" {
+		t.Fatalf("editedText = %q, want %q", got, "new caption")
+	}
+}

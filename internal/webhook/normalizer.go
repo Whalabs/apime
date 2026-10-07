@@ -242,9 +242,12 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			result["text"] = extText.GetText()
 		}
 
-		if img := evt.Message.GetImageMessage(); img != nil {
+		if img := imageOf(evt.Message); img != nil {
 			h.log.Info("detectada imagem, iniciando processamento", zap.String("msg_id", evt.Info.ID))
 			result["mediaType"] = "image"
+			if evt.Message.GetImageMessage() == nil {
+				result["isInstant"] = true
+			}
 			if img.GetCaption() != "" {
 				result["caption"] = img.GetCaption()
 			}
@@ -536,7 +539,7 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		var mentionedJids []string
 		if extText := evt.Message.GetExtendedTextMessage(); extText != nil && extText.GetContextInfo() != nil {
 			mentionedJids = extText.GetContextInfo().GetMentionedJID()
-		} else if img := evt.Message.GetImageMessage(); img != nil && img.GetContextInfo() != nil {
+		} else if img := imageOf(evt.Message); img != nil && img.GetContextInfo() != nil {
 			mentionedJids = img.GetContextInfo().GetMentionedJID()
 		} else if vid := evt.Message.GetVideoMessage(); vid != nil && vid.GetContextInfo() != nil {
 			mentionedJids = vid.GetContextInfo().GetMentionedJID()
