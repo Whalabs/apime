@@ -109,6 +109,9 @@ func nfString(m map[string]interface{}, keys ...string) string {
 }
 
 func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, client *whatsmeow.Client, evt any) map[string]interface{} {
+	if result, ok := h.normalizeCall(ctx, client, evt); ok {
+		return result
+	}
 	result := make(map[string]interface{})
 
 	switch evt := evt.(type) {

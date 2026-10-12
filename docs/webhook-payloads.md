@@ -25,7 +25,7 @@ parseado e reserializado quebra a assinatura.
 
 ## Tipos de Eventos
 
-São 12 tipos entregues ao consumidor. `ignore` existe no código mas é descartado antes da entrega.
+São 15 tipos entregues ao consumidor. `ignore` existe no código mas é descartado antes da entrega.
 
 | Tipo | Quando |
 |---|---|
@@ -40,6 +40,9 @@ São 12 tipos entregues ao consumidor. `ignore` existe no código mas é descart
 | `temporary_ban` | conta banida temporariamente, ou reach-out travado |
 | `restriction_lifted` | restrição anterior saiu |
 | `contact_reachout_locked` | envio bloqueado para um contato específico (463) |
+| `call.offer` | ligação recebida |
+| `call.ended` | ligação encerrada, recusada ou atendida em outro aparelho |
+| `call.state` | mudança de fase da ligação no motor de chamadas (só com `calls_enabled`) |
 | `unknown` | evento não mapeado |
 
 ---
@@ -182,7 +185,7 @@ consumidor enquanto todo envio falhava.
 
 ### `restriction_lifted`
 A restrição anterior saiu e a conta voltou ao normal. Traz `active: false`. O consumidor devolve
-a conexao para `connected`.
+a conexão para `connected`.
 
 ---
 
@@ -196,6 +199,36 @@ ainda não iniciou conversa. Não restringe a conta inteira.
 | `reason` | `server returned error 463`        |
 | `detail` | explicação do bloqueio             |
 | `code`   | `463`                              |
+
+---
+
+### Chamadas: `call.offer`, `call.ended`, `call.state`
+
+`call.offer` e `call.ended` saem **em toda instância com webhook**, mesmo sem o motor de chamadas,
+para o consumidor registrar a ligação perdida e, se quiser, recusar sozinho. `call.state` só existe
+com `calls_enabled: true` (ver `PUT /instances/{id}`).
+
+Campos de `call.offer` e `call.ended`:
+
+| Campo        | Descrição                                                              |
+|--------------|------------------------------------------------------------------------|
+| `callId`     | id da ligação, a chave de todas as rotas `/calls/{callId}`              |
+| `from`       | JID de telefone de quem ligou, quando resolvido                         |
+| `lid`        | LID de quem ligou, quando a ligação veio endereçada por LID             |
+| `timestamp`  | quando o servidor do WhatsApp registrou o evento                        |
+| `rejectFrom` | JID a passar em `POST /calls/{callId}/reject` numa instância sem motor  |
+
+`call.offer` soma `isVideo` e `platform` (plataforma do aparelho de quem ligou).
+`call.ended` soma `reason`: o motivo do servidor, `rejected` quando o outro lado recusou, ou o
+`terminate_reason` quando a ligação foi atendida em outro aparelho (por exemplo, o celular).
+
+`call.state` traz `callId`, `from`, `lid`, `direction` (`incoming` ou `outgoing`), `startedAt`,
+`state` (`calling`, `ringing`, `connecting`, `active`, `ended`) e, no fim, `reason`.
+
+> **Trate os eventos de chamada como idempotentes por `callId`.** Um desligamento do outro lado
+> chega duas vezes: como `call.ended` (do WhatsApp) e como `call.state` com `state: ended` (do
+> motor). O conteúdo bruto do evento (`raw`) **não** é enviado, porque a oferta carrega a chave
+> cifrada da ligação.
 
 ---
 

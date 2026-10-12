@@ -26,8 +26,11 @@ type Instance struct {
 	HistorySyncStatus    HistorySyncStatus `json:"historySyncStatus"`
 	HistorySyncCycleID   string            `json:"historySyncCycleId"`
 	HistorySyncUpdatedAt *time.Time        `json:"historySyncUpdatedAt,omitempty"`
-	CreatedAt            time.Time         `json:"createdAt"`
-	UpdatedAt            time.Time         `json:"updatedAt"`
+	// CallsEnabled installs the VoIP engine on this instance's client. Off by default
+	// because the engine preaccepts every incoming call it sees.
+	CallsEnabled bool      `json:"callsEnabled"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
 type Message struct {

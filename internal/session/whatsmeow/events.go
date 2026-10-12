@@ -29,11 +29,13 @@ func (m *Manager) handleEvent(instanceID string, evt any) {
 
 		switch evt.(type) {
 		case *events.Message, *events.Receipt, *events.Presence,
-			*events.UndecryptableMessage, *events.ChatPresence, *events.Contact:
+			*events.UndecryptableMessage, *events.ChatPresence, *events.Contact,
+			*events.CallOffer, *events.CallTerminate, *events.CallReject:
 			// UndecryptableMessage covers view-once (stub without media) and desynced sessions;
 			// ChatPresence is the "typing…" indicator; Contact carries the appstate contact
-			// sync (incl. the WhatsApp @username, 2026). Without forwarding these, the
-			// normalizeEvent that handles them would be dead code.
+			// sync (incl. the WhatsApp @username, 2026). Call events go out even on instances
+			// without the VoIP engine, so the consumer can log a missed call. Without forwarding
+			// these, the normalizeEvent that handles them would be dead code.
 			go handler.Handle(context.Background(), instanceID, instanceJID, client, evt)
 		}
 	}

@@ -77,6 +77,7 @@ func (m *Manager) Disconnect(instanceID string) error {
 }
 
 func (m *Manager) DeleteSession(instanceID string) error {
+	m.detachCalls(instanceID)
 	var client *whatsmeow.Client
 
 	m.mu.Lock()
@@ -412,6 +413,7 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 	client.AddEventHandler(func(evt any) {
 		m.handleEvent(instanceID, evt)
 	})
+	m.attachCalls(ctx, instanceID, client)
 
 	m.log.Debug("conectando cliente restaurado", zap.String("instance_id", instanceID))
 	var connectErr error

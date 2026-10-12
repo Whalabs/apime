@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -60,7 +61,14 @@ type UpdateInput struct {
 	Name          string
 	WebhookURL    *string
 	WebhookSecret *string
+	CallsEnabled  *bool
 	OwnerUserID   string
+}
+
+// clientReloader is implemented by the real session manager. A calls_enabled change only
+// takes effect on a fresh client, because the VoIP engine is installed before Connect.
+type clientReloader interface {
+	ReloadClient(ctx context.Context, instanceID string) error
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (model.Instance, error) {
@@ -127,10 +135,11 @@ func (s *Service) Update(ctx context.Context, id string, input UpdateInput) (mod
 	if err != nil {
 		return model.Instance{}, err
 	}
+	callsWereEnabled := inst.CallsEnabled
 	if err := applyUpdate(&inst, input); err != nil {
 		return model.Instance{}, err
 	}
-	return s.repo.Update(ctx, inst)
+	return s.saveAndReload(ctx, inst, callsWereEnabled)
 }
 
 // applyUpdate validates the input and applies only the fields present onto the existing instance.
@@ -150,8 +159,27 @@ func applyUpdate(inst *model.Instance, input UpdateInput) error {
 	if input.WebhookSecret != nil {
 		inst.WebhookSecret = strings.TrimSpace(*input.WebhookSecret)
 	}
+	if input.CallsEnabled != nil {
+		inst.CallsEnabled = *input.CallsEnabled
+	}
 	inst.Name = strings.TrimSpace(input.Name)
 	return nil
+}
+
+// saveAndReload persists the instance and, when calls_enabled flipped, swaps its client.
+func (s *Service) saveAndReload(ctx context.Context, inst model.Instance, callsWereEnabled bool) (model.Instance, error) {
+	updated, err := s.repo.Update(ctx, inst)
+	if err != nil {
+		return model.Instance{}, err
+	}
+	if updated.CallsEnabled != callsWereEnabled {
+		if r, ok := s.session.(clientReloader); ok {
+			if err := r.ReloadClient(ctx, updated.ID); err != nil {
+				return updated, fmt.Errorf("configuração salva, mas a reconexão falhou: %w", err)
+			}
+		}
+	}
+	return updated, nil
 }
 
 func (s *Service) UpdateByUser(ctx context.Context, id string, input UpdateInput) (model.Instance, error) {
@@ -164,10 +192,11 @@ func (s *Service) UpdateByUser(ctx context.Context, id string, input UpdateInput
 		return model.Instance{}, storage.ErrNotFound
 	}
 
+	callsWereEnabled := inst.CallsEnabled
 	if err := applyUpdate(&inst, input); err != nil {
 		return model.Instance{}, err
 	}
-	return s.repo.Update(ctx, inst)
+	return s.saveAndReload(ctx, inst, callsWereEnabled)
 }
 
 func (s *Service) UpdateStatus(ctx context.Context, id string, status model.InstanceStatus) (model.Instance, error) {

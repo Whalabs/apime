@@ -255,6 +255,7 @@ func (m *Manager) createSession(ctx context.Context, instanceID string, forceRec
 	client.AddEventHandler(func(evt any) {
 		m.handleEvent(instanceID, evt)
 	})
+	m.attachCalls(ctx, instanceID, client)
 
 	qrCtx, qrCancel := context.WithCancel(context.Background())
 	qrChan, err := client.GetQRChannel(qrCtx)

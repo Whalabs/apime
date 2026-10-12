@@ -86,6 +86,8 @@ type Manager struct {
 	sharedContainer    *sqlstore.Container
 	outgoingMsgCache   sync.Map             // msgID -> outgoingMsgEntry, for retry of any type (including media)
 	appStateResync     map[string]time.Time // "<instanceID>:<collection>" -> last full sync
+	voipMu             sync.Mutex
+	voip               map[string]*callEngine // instances with calls_enabled
 }
 
 func NewManager(log *zap.Logger, encKey, storageDriver, baseDir, pgConnString string, instanceRepo storage.InstanceRepository, historySyncRepo storage.HistorySyncRepository, messageRepo storage.MessageRepository, eventLogRepo storage.EventLogRepository) *Manager {
@@ -144,6 +146,7 @@ func NewManager(log *zap.Logger, encKey, storageDriver, baseDir, pgConnString st
 		connectedAt:        make(map[string]time.Time),
 		messageRepo:        messageRepo,
 		sharedContainer:    sharedContainer,
+		voip:               make(map[string]*callEngine),
 	}
 }
 

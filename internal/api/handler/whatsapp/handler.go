@@ -72,6 +72,12 @@ func (h *Handler) Register(r *gin.RouterGroup) {
 	r.GET("/instances/:id/whatsapp/groups", h.listGroups)
 	r.GET("/instances/:id/whatsapp/groups/:group", h.getGroupInfo)
 	r.POST("/instances/:id/whatsapp/upload", h.uploadMedia)
+	r.POST("/instances/:id/calls", h.startCall)
+	r.GET("/instances/:id/calls", h.listCalls)
+	r.GET("/instances/:id/calls/:callId", h.getCall)
+	r.POST("/instances/:id/calls/:callId/answer", h.answerCall)
+	r.POST("/instances/:id/calls/:callId/reject", h.rejectCall)
+	r.DELETE("/instances/:id/calls/:callId", h.hangupCall)
 }
 
 func (h *Handler) requireInstanceToken(c *gin.Context) (string, bool) {

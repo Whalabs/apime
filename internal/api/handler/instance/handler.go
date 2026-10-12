@@ -63,6 +63,7 @@ type updateInstanceRequest struct {
 	Name          string  `json:"name" binding:"required,min=2"`
 	WebhookURL    *string `json:"webhook_url"`
 	WebhookSecret *string `json:"webhook_secret"`
+	CallsEnabled  *bool   `json:"calls_enabled"`
 }
 
 func (h *Handler) create(c *gin.Context) {
@@ -155,6 +156,7 @@ func (h *Handler) update(c *gin.Context) {
 		Name:          req.Name,
 		WebhookURL:    req.WebhookURL,
 		WebhookSecret: req.WebhookSecret,
+		CallsEnabled:  req.CallsEnabled,
 		OwnerUserID:   callerID,
 	})
 	if err != nil {
