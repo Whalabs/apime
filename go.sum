@@ -4,8 +4,8 @@ github.com/DATA-DOG/go-sqlmock v1.5.2 h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7Oputl
 github.com/DATA-DOG/go-sqlmock v1.5.2/go.mod h1:88MAG/4G7SMwSE3CeA0ZKzrT5CiOU3OJ+JlNzwDqpNU=
 github.com/Whalabs/meowcaller v0.0.0-20261012163950-329a4a7cd7e6 h1:ctWWkkNEUFqfOC7fEfPcKTV9mCqAbOympj02lFoRQac=
 github.com/Whalabs/meowcaller v0.0.0-20261012163950-329a4a7cd7e6/go.mod h1:xCEURKKjIz2IGHEHuqfnYGVtAb1mkQbAY4dMl0Fkjfg=
-github.com/Whalabs/whatsmeow v0.0.0-20261007222620-8f21a134258c h1:LjymkBstrQInL+1aZMvxDD8ekhAWbrSm3hE8jOkpR9A=
-github.com/Whalabs/whatsmeow v0.0.0-20261007222620-8f21a134258c/go.mod h1:7G7AeRACrC8Se+01+SQbdOp2J/Ce0DUMGxTKFKfRHW4=
+github.com/Whalabs/whatsmeow v0.0.0-20261013230938-fdb9b6da9db0 h1:6jlFcHvW6d0o0WOZ15mIWqg2KVi07xc7VreDEF42G9k=
+github.com/Whalabs/whatsmeow v0.0.0-20261013230938-fdb9b6da9db0/go.mod h1:7G7AeRACrC8Se+01+SQbdOp2J/Ce0DUMGxTKFKfRHW4=
 github.com/agnivade/levenshtein v1.2.1 h1:EHBY3UOn1gwdy/VbFwgo4cxecRznFk7fKWN1KOX7eoM=
 github.com/agnivade/levenshtein v1.2.1/go.mod h1:QVVI16kDrtSuwcpd0p1+xMC6Z/VfhtCyDIjcwga4/DU=
 github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883 h1:bvNMNQO63//z+xNgfBlViaCIJKLlCJ6/fmUseuG0wVQ=
