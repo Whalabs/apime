@@ -67,6 +67,10 @@ func runSQLiteMigrations(ctx context.Context, cfg config.Config, migrationsDir, 
 		log.Fatalf("migrate: erro ao aplicar migrations: %v", err)
 	}
 
+	if err := ensureAdminSQLite(ctx, db); err != nil {
+		log.Fatalf("migrate: erro ao criar o admin inicial: %v", err)
+	}
+
 	if withSeeds {
 		if err := runSQLiteSeeds(ctx, db, seedsDir); err != nil {
 			log.Fatalf("migrate: erro ao executar seeds: %v", err)
@@ -184,6 +188,10 @@ func runPostgresMigrations(ctx context.Context, cfg config.Config, migrationsDir
 
 	if err := applyMigrations(ctx, pool, migrationsDir); err != nil {
 		log.Fatalf("migrate: erro ao aplicar migrations: %v", err)
+	}
+
+	if err := ensureAdminPostgres(ctx, pool); err != nil {
+		log.Fatalf("migrate: erro ao criar o admin inicial: %v", err)
 	}
 
 	if withSeeds {

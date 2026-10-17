@@ -25,6 +25,14 @@ Baseada na biblioteca [WhatsMeow](https://github.com/tulir/whatsmeow) com dashbo
 - **Email:** `admin@apime.local`
 - **Senha:** `admin123`
 
+Para começar com outro e-mail e senha, defina `ADMIN_EMAIL` e `ADMIN_PASSWORD` no `.env` antes do
+primeiro boot. Em servidor exposto à internet, faça isso ou troque a senha no primeiro acesso.
+
+## Imagem pronta
+
+Cada push na `main` gera uma release e publica `ghcr.io/open-apime/apime:<versão>` (amd64 e arm64).
+As notas de cada versão ficam em [Releases](https://github.com/open-apime/apime/releases).
+
 
 - **API Specification:** `openapi.yaml`
 

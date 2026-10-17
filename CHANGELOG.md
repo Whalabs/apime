@@ -1,5 +1,9 @@
 # Changelog
 
+A partir da v1.2.0, as notas de cada versão ficam em
+[Releases](https://github.com/open-apime/apime/releases), geradas a cada push na `main`.
+Abaixo, o histórico até a v1.0.9.
+
 ## [v1.0.9] - 2026-01-21
 ### Adicionado
 - **Resolução inteligente de JIDs brasileiros**: os endpoints de envio de mensagens agora aceitam números "crus". O service consulta `IsOnWhatsApp` para decidir automaticamente se precisa inserir ou remover o nono dígito em números `+55`, reduzindo rejeições por formato incorreto (@internal/service/message/service.go#390-446, @internal/api/handler/message_handler.go#87-176).
