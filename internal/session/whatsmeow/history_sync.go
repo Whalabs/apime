@@ -22,20 +22,7 @@ func (m *Manager) initHistorySyncCycle(instanceID string) {
 	cycleID := uuid.New().String()
 	now := time.Now()
 
-	inst, err := m.instanceRepo.GetByID(ctx, instanceID)
-	if err != nil {
-		m.log.Error("erro ao buscar instância para iniciar ciclo de sync",
-			zap.String("instance_id", instanceID),
-			zap.Error(err),
-		)
-		return
-	}
-
-	inst.HistorySyncCycleID = cycleID
-	inst.HistorySyncStatus = model.HistorySyncStatusRunning
-	inst.HistorySyncUpdatedAt = &now
-
-	if _, err := m.instanceRepo.Update(ctx, inst); err != nil {
+	if err := m.instanceRepo.UpdateHistorySync(ctx, instanceID, model.HistorySyncStatusRunning, &cycleID, now); err != nil {
 		m.log.Error("erro ao atualizar instância com cycle_id",
 			zap.String("instance_id", instanceID),
 			zap.String("cycle_id", cycleID),
@@ -173,20 +160,7 @@ func (m *Manager) finalizeHistorySyncCycle(instanceID string, status model.Histo
 		return
 	}
 
-	inst, err := m.instanceRepo.GetByID(ctx, instanceID)
-	if err != nil {
-		m.log.Error("erro ao buscar instância para finalizar ciclo",
-			zap.String("instance_id", instanceID),
-			zap.Error(err),
-		)
-		return
-	}
-
-	now := time.Now()
-	inst.HistorySyncStatus = status
-	inst.HistorySyncUpdatedAt = &now
-
-	if _, err := m.instanceRepo.Update(ctx, inst); err != nil {
+	if err := m.instanceRepo.UpdateHistorySync(ctx, instanceID, status, nil, time.Now()); err != nil {
 		m.log.Error("erro ao finalizar ciclo de sync",
 			zap.String("instance_id", instanceID),
 			zap.Error(err),

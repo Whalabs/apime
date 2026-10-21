@@ -255,6 +255,32 @@ func (r *instanceRepo) Update(ctx context.Context, inst model.Instance) (model.I
 	return inst, nil
 }
 
+func (r *instanceRepo) UpdateStatus(ctx context.Context, id string, status model.InstanceStatus) error {
+	result, err := r.db.Conn.ExecContext(ctx, `UPDATE instances SET status = ?, updated_at = ? WHERE id = ?`,
+		string(status), time.Now().Format(time.RFC3339), id)
+	if err != nil {
+		return err
+	}
+	if rows, _ := result.RowsAffected(); rows == 0 {
+		return mapError(sql.ErrNoRows)
+	}
+	return nil
+}
+
+func (r *instanceRepo) UpdateHistorySync(ctx context.Context, id string, status model.HistorySyncStatus, cycleID *string, at time.Time) error {
+	result, err := r.db.Conn.ExecContext(ctx, `
+		UPDATE instances
+		SET history_sync_status = ?, history_sync_cycle_id = COALESCE(?, history_sync_cycle_id), history_sync_updated_at = ?, updated_at = ?
+		WHERE id = ?`, string(status), cycleID, formatTimePtr(&at), time.Now().Format(time.RFC3339), id)
+	if err != nil {
+		return err
+	}
+	if rows, _ := result.RowsAffected(); rows == 0 {
+		return mapError(sql.ErrNoRows)
+	}
+	return nil
+}
+
 func nullIfEmpty(v string) *string {
 	if v == "" {
 		return nil

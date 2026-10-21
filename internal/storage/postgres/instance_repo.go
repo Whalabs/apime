@@ -243,6 +243,31 @@ func (r *instanceRepo) Update(ctx context.Context, inst model.Instance) (model.I
 	return inst, nil
 }
 
+func (r *instanceRepo) UpdateStatus(ctx context.Context, id string, status model.InstanceStatus) error {
+	tag, err := r.db.Pool.Exec(ctx, `UPDATE instances SET status = $2, updated_at = $3 WHERE id = $1`, id, string(status), time.Now())
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *instanceRepo) UpdateHistorySync(ctx context.Context, id string, status model.HistorySyncStatus, cycleID *string, at time.Time) error {
+	tag, err := r.db.Pool.Exec(ctx, `
+		UPDATE instances
+		SET history_sync_status = $2, history_sync_cycle_id = COALESCE($3::uuid, history_sync_cycle_id), history_sync_updated_at = $4, updated_at = $5
+		WHERE id = $1`, id, string(status), cycleID, at, time.Now())
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func nullIfEmpty(v string) *string {
 	if v == "" {
 		return nil

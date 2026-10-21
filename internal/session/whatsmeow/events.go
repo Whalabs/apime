@@ -420,18 +420,7 @@ func (m *Manager) updateInstanceStatus(instanceID string, status model.InstanceS
 		return
 	}
 
-	ctx := context.Background()
-	inst, err := m.instanceRepo.GetByID(ctx, instanceID)
-	if err != nil {
-		m.log.Warn("erro ao buscar instância para atualizar status",
-			zap.String("instance_id", instanceID),
-			zap.Error(err),
-		)
-		return
-	}
-
-	inst.Status = status
-	if _, err := m.instanceRepo.Update(ctx, inst); err != nil {
+	if err := m.instanceRepo.UpdateStatus(context.Background(), instanceID, status); err != nil {
 		m.log.Warn("erro ao atualizar status da instância no banco",
 			zap.String("instance_id", instanceID),
 			zap.String("status", string(status)),

@@ -468,10 +468,7 @@ func (m *Manager) restoreSessionIfExists(ctx context.Context, instanceID string)
 			)
 
 			if m.instanceRepo != nil {
-				inst, err := m.instanceRepo.GetByID(ctx, instanceID)
-				if err == nil {
-					inst.Status = model.InstanceStatusError
-					_, _ = m.instanceRepo.Update(ctx, inst)
+				if err := m.instanceRepo.UpdateStatus(ctx, instanceID, model.InstanceStatusError); err == nil {
 					m.log.Info("status atualizado para error no banco",
 						zap.String("instance_id", instanceID),
 					)

@@ -162,7 +162,7 @@ func (h *MessageHandler) sendText(c *gin.Context) {
 	})
 	if err != nil {
 		if errors.Is(err, messageSvc.ErrInstanceNotConnected) {
-			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+			response.InstanceNotConnected(c)
 		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 			response.Error(c, http.StatusBadRequest, err)
 		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) || errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {
@@ -241,7 +241,7 @@ func (h *MessageHandler) sendMedia(c *gin.Context) {
 	})
 	if err != nil {
 		if errors.Is(err, messageSvc.ErrInstanceNotConnected) {
-			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+			response.InstanceNotConnected(c)
 		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 			response.Error(c, http.StatusBadRequest, err)
 		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) || errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {
@@ -319,7 +319,7 @@ func (h *MessageHandler) sendAudio(c *gin.Context) {
 	})
 	if err != nil {
 		if errors.Is(err, messageSvc.ErrInstanceNotConnected) {
-			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+			response.InstanceNotConnected(c)
 		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 			response.Error(c, http.StatusBadRequest, err)
 		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) || errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {
@@ -395,7 +395,7 @@ func (h *MessageHandler) sendDocument(c *gin.Context) {
 	})
 	if err != nil {
 		if errors.Is(err, messageSvc.ErrInstanceNotConnected) {
-			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+			response.InstanceNotConnected(c)
 		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 			response.Error(c, http.StatusBadRequest, err)
 		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) || errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {
@@ -456,7 +456,7 @@ func (h *MessageHandler) sendContact(c *gin.Context) {
 		if errors.Is(err, messageSvc.ErrInvalidPayload) {
 			response.Error(c, http.StatusBadRequest, err)
 		} else if errors.Is(err, messageSvc.ErrInstanceNotConnected) {
-			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+			response.InstanceNotConnected(c)
 		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 			response.Error(c, http.StatusBadRequest, err)
 		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) || errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {
@@ -519,7 +519,7 @@ func (h *MessageHandler) sendLocation(c *gin.Context) {
 		if errors.Is(err, messageSvc.ErrInvalidPayload) {
 			response.Error(c, http.StatusBadRequest, err)
 		} else if errors.Is(err, messageSvc.ErrInstanceNotConnected) {
-			response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+			response.InstanceNotConnected(c)
 		} else if errors.Is(err, messageSvc.ErrInvalidJID) {
 			response.Error(c, http.StatusBadRequest, err)
 		} else if errors.Is(err, messageSvc.ErrSessionUnavailable) || errors.Is(err, messageSvc.ErrRecipientLookupUnavailable) {

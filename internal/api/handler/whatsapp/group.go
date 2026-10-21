@@ -53,7 +53,7 @@ func (h *Handler) createGroup(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 
@@ -97,7 +97,7 @@ func (h *Handler) updateGroupParticipants(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 
@@ -164,7 +164,7 @@ func (h *Handler) listGroupJoinRequests(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 
@@ -198,7 +198,7 @@ func (h *Handler) updateGroupJoinRequests(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 
@@ -261,7 +261,7 @@ func (h *Handler) getGroupInfo(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 
@@ -290,7 +290,7 @@ func (h *Handler) getGroupInviteLink(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 
@@ -329,7 +329,7 @@ func (h *Handler) getGroupInfoFromLink(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	info, err := client.GetGroupInfoFromLink(c.Request.Context(), strings.TrimSpace(req.Link))
@@ -356,7 +356,7 @@ func (h *Handler) joinGroupWithLink(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	jid, err := client.JoinGroupWithLink(c.Request.Context(), strings.TrimSpace(req.Link))
@@ -374,7 +374,7 @@ func (h *Handler) leaveGroup(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 
@@ -403,7 +403,7 @@ func (h *Handler) listGroups(c *gin.Context) {
 
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 

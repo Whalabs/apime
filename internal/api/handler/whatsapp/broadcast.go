@@ -59,7 +59,7 @@ func (h *Handler) listBroadcastLists(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	lists, err := client.GetBroadcastLists(c.Request.Context())
@@ -81,7 +81,7 @@ func (h *Handler) getBroadcastList(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	jid, err := parseBroadcastListJID(c.Param("jid"))

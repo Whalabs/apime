@@ -61,6 +61,14 @@ func (h *Handler) getInstanceInfo(c *gin.Context) {
 	}
 
 	isLoggedIn := client.IsLoggedIn()
+	// Heal both ways: this endpoint used to only demote, so a stale "error" outlived the session
+	// coming back and sends kept being refused while this reported connected.
+	if isLoggedIn && client.IsConnected() && instance.Status != model.InstanceStatusActive {
+		if _, updateErr := h.service.UpdateStatus(c.Request.Context(), instanceID, model.InstanceStatusActive); updateErr != nil {
+			h.log.Warn("erro ao atualizar status da instância", zap.String("instance_id", instanceID), zap.Error(updateErr))
+		}
+		instance.Status = model.InstanceStatusActive
+	}
 	if !isLoggedIn && instance.Status == model.InstanceStatusActive {
 		ctxUpdate := c.Request.Context()
 		if _, updateErr := h.service.UpdateStatus(ctxUpdate, instanceID, model.InstanceStatusError); updateErr != nil {
@@ -115,7 +123,7 @@ func (h *Handler) getProfile(c *gin.Context) {
 
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 
@@ -159,7 +167,7 @@ func (h *Handler) getBusinessProfile(c *gin.Context) {
 
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 
@@ -197,7 +205,7 @@ func (h *Handler) getProfilePicture(c *gin.Context) {
 
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 

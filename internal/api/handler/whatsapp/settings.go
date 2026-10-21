@@ -19,7 +19,7 @@ func (h *Handler) getStatusPrivacy(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	privacy, err := client.GetStatusPrivacy(c.Request.Context())
@@ -37,7 +37,7 @@ func (h *Handler) getPrivacySettings(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	settings := client.GetPrivacySettings(c.Request.Context())
@@ -56,7 +56,7 @@ func (h *Handler) setPrivacySetting(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	var req setPrivacySettingRequest
@@ -95,7 +95,7 @@ func (h *Handler) setStatusMessage(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	message := strings.TrimSpace(req.Message)
@@ -122,7 +122,7 @@ func (h *Handler) setDefaultDisappearingTimer(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	if err := client.SetDefaultDisappearingTimer(c.Request.Context(), time.Duration(req.Seconds)*time.Second); err != nil {
@@ -150,7 +150,7 @@ func (h *Handler) getChatSettings(c *gin.Context) {
 
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	if client.Store == nil || client.Store.ChatSettings == nil {
@@ -195,7 +195,7 @@ func (h *Handler) setChatSettings(c *gin.Context) {
 
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	if client.Store == nil || client.Store.ChatSettings == nil {

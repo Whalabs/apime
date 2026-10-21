@@ -31,7 +31,7 @@ func (h *Handler) setPresence(c *gin.Context) {
 
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *Handler) uploadMedia(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	var req uploadMediaRequest

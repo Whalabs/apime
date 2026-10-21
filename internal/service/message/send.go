@@ -129,26 +129,28 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		return model.Message{}, fmt.Errorf("instância não encontrada: %w", err)
 	}
 
+	client, err := s.sessionMgr.GetClient(input.InstanceID)
+
 	if instance.Status != model.InstanceStatusActive {
-		return model.Message{}, ErrInstanceNotConnected
+		// The stored status only goes back to active on a Connected event, so it can stay stale while
+		// the session is live, refusing every send. Trust the live session (memory reads, no network);
+		// a temporary ban disconnects the socket, so it still refuses here.
+		if err != nil || !client.IsLoggedIn() || !client.IsConnected() {
+			return model.Message{}, ErrInstanceNotConnected
+		}
+		s.log.Warn("status da instância divergia da sessão ativa, corrigido para active",
+			zap.String("instance_id", input.InstanceID),
+			zap.String("stored_status", string(instance.Status)))
+		_ = s.instanceRepo.UpdateStatus(context.Background(), input.InstanceID, model.InstanceStatusActive)
 	}
 
-	client, err := s.sessionMgr.GetClient(input.InstanceID)
 	if err != nil {
-		ctxUpdate := context.Background()
-		if instToUpdate, fetchErr := s.instanceRepo.GetByID(ctxUpdate, input.InstanceID); fetchErr == nil {
-			instToUpdate.Status = model.InstanceStatusError
-			_, _ = s.instanceRepo.Update(ctxUpdate, instToUpdate)
-		}
+		_ = s.instanceRepo.UpdateStatus(context.Background(), input.InstanceID, model.InstanceStatusError)
 		return model.Message{}, fmt.Errorf("cliente não encontrado: %w", err)
 	}
 
 	if !client.IsLoggedIn() {
-		ctxUpdate := context.Background()
-		if instToUpdate, fetchErr := s.instanceRepo.GetByID(ctxUpdate, input.InstanceID); fetchErr == nil {
-			instToUpdate.Status = model.InstanceStatusDisconnected
-			_, _ = s.instanceRepo.Update(ctxUpdate, instToUpdate)
-		}
+		_ = s.instanceRepo.UpdateStatus(context.Background(), input.InstanceID, model.InstanceStatusDisconnected)
 		return model.Message{}, ErrInstanceNotConnected
 	}
 
@@ -898,11 +900,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		if strings.Contains(err.Error(), "not logged in") {
 			s.log.Warn("instância não logada, abortando retentativas",
 				zap.String("instance_id", input.InstanceID))
-			ctxUpdate := context.Background()
-			if instToUpdate, fetchErr := s.instanceRepo.GetByID(ctxUpdate, input.InstanceID); fetchErr == nil {
-				instToUpdate.Status = model.InstanceStatusDisconnected
-				_, _ = s.instanceRepo.Update(ctxUpdate, instToUpdate)
-			}
+			_ = s.instanceRepo.UpdateStatus(context.Background(), input.InstanceID, model.InstanceStatusDisconnected)
 			break
 		}
 
@@ -910,11 +908,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			s.log.Warn("instância desconectada: dispositivo sem sessão ativa",
 				zap.String("instance_id", input.InstanceID),
 				zap.String("to", toJID.String()))
-			ctxUpdate := context.Background()
-			if instToUpdate, fetchErr := s.instanceRepo.GetByID(ctxUpdate, input.InstanceID); fetchErr == nil {
-				instToUpdate.Status = model.InstanceStatusDisconnected
-				_, _ = s.instanceRepo.Update(ctxUpdate, instToUpdate)
-			}
+			_ = s.instanceRepo.UpdateStatus(context.Background(), input.InstanceID, model.InstanceStatusDisconnected)
 			break
 		}
 	}

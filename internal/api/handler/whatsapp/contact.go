@@ -18,7 +18,7 @@ func (h *Handler) listContacts(c *gin.Context) {
 
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	if client.Store == nil || client.Store.Contacts == nil {
@@ -52,7 +52,7 @@ func (h *Handler) getContact(c *gin.Context) {
 
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 
@@ -120,7 +120,7 @@ func (h *Handler) getUserInfo(c *gin.Context) {
 
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 
@@ -156,7 +156,7 @@ func (h *Handler) getContactQRLink(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	code, err := client.GetContactQRLink(c.Request.Context(), revoke)
@@ -183,7 +183,7 @@ func (h *Handler) resolveContactQRLink(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	target, err := client.ResolveContactQRLink(c.Request.Context(), strings.TrimSpace(req.Code))
@@ -210,7 +210,7 @@ func (h *Handler) resolveBusinessMessageLink(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	target, err := client.ResolveBusinessMessageLink(c.Request.Context(), strings.TrimSpace(req.Code))

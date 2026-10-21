@@ -18,7 +18,7 @@ func (h *Handler) newsletterSubscribeLiveUpdates(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	jidStr := strings.TrimSpace(c.Param("jid"))
@@ -46,7 +46,7 @@ func (h *Handler) newsletterMarkViewed(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	jidStr := strings.TrimSpace(c.Param("jid"))
@@ -93,7 +93,7 @@ func (h *Handler) newsletterSendReaction(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	jidStr := strings.TrimSpace(c.Param("jid"))
@@ -137,7 +137,7 @@ func (h *Handler) getNewsletterMessageUpdates(c *gin.Context) {
 	}
 	client, err := h.sessionManager.GetClient(instanceID)
 	if err != nil {
-		response.ErrorWithMessage(c, http.StatusBadRequest, "instância não conectada")
+		response.InstanceNotConnected(c)
 		return
 	}
 	jidStr := strings.TrimSpace(c.Param("jid"))

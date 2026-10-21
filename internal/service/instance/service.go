@@ -200,12 +200,10 @@ func (s *Service) UpdateByUser(ctx context.Context, id string, input UpdateInput
 }
 
 func (s *Service) UpdateStatus(ctx context.Context, id string, status model.InstanceStatus) (model.Instance, error) {
-	instance, err := s.repo.GetByID(ctx, id)
-	if err != nil {
+	if err := s.repo.UpdateStatus(ctx, id, status); err != nil {
 		return model.Instance{}, err
 	}
-	instance.Status = status
-	return s.repo.Update(ctx, instance)
+	return s.repo.GetByID(ctx, id)
 }
 
 func (s *Service) GetQR(ctx context.Context, id string) (string, error) {

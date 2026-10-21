@@ -17,6 +17,11 @@ type InstanceRepository interface {
 	List(ctx context.Context, query string, limit, offset int) ([]model.Instance, int, error)
 	ListByOwner(ctx context.Context, ownerUserID string, query string, limit, offset int) ([]model.Instance, int, error)
 	Update(ctx context.Context, instance model.Instance) (model.Instance, error)
+	// UpdateStatus writes only the status column. Update rewrites the whole row, so a concurrent
+	// writer holding an older copy would put a stale status back.
+	UpdateStatus(ctx context.Context, id string, status model.InstanceStatus) error
+	// UpdateHistorySync writes only the history sync columns; a nil cycleID keeps the current one.
+	UpdateHistorySync(ctx context.Context, id string, status model.HistorySyncStatus, cycleID *string, at time.Time) error
 	Delete(ctx context.Context, id string) error
 }
 
