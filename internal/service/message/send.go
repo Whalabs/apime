@@ -788,6 +788,10 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 	var resp whatsmeow.SendResponse
 	maxRetries := 3
 	reachoutLocked := false
+	// Stays true only while every failed attempt was a socket-down error, i.e. nothing ever left the
+	// process. Only then is the failure answered as a retryable 503 (the SDK resends on 503).
+	onlySocketDown := true
+	var waitDeadline time.Time
 
 	// Only here does the wait cost anything: everything that could be prepared already was, while
 	// it ran. From this point on the message does go out, so the deferred stop becomes a no-op.
@@ -822,6 +826,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 					zap.Int("attempt", attempt),
 					zap.String("to", toJID.String()))
 				err = fmt.Errorf("WhatsApp não confirmou envio (ID vazio)")
+				onlySocketDown = false
 				continue
 			}
 
@@ -840,6 +845,32 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			zap.Int("attempt", attempt),
 			zap.Error(err),
 			zap.String("to", toJID.String()))
+
+		if !isSocketDown(err) {
+			onlySocketDown = false
+		} else if attempt < maxRetries {
+			deadline := outages.deadline(input.InstanceID, time.Now())
+			if waitDeadline.IsZero() {
+				waitDeadline = time.Now().Add(reconnectWaitBudget)
+			}
+			if waitDeadline.Before(deadline) {
+				deadline = waitDeadline
+			}
+			start := time.Now()
+			if !waitUntilConnected(ctx, func() bool { return client.IsConnected() && client.IsLoggedIn() }, deadline) {
+				s.log.Warn("socket did not come back in time, giving up on the send",
+					zap.String("instance_id", input.InstanceID),
+					zap.String("to", toJID.String()),
+					zap.Duration("waited", time.Since(start)))
+				break
+			}
+			outages.clear(input.InstanceID)
+			s.log.Info("socket back after a drop, resending",
+				zap.String("instance_id", input.InstanceID),
+				zap.String("to", toJID.String()),
+				zap.Duration("waited", time.Since(start)))
+			continue
+		}
 
 		if strings.Contains(err.Error(), "untrusted identity") {
 			s.log.Warn("erro de identidade não confiável detectado, limpando identidade e tentando novamente",
@@ -966,9 +997,14 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			return msg, ErrContactReachoutLocked
 		}
 
+		if onlySocketDown && isSocketDown(err) {
+			return msg, fmt.Errorf("%w: %v", ErrSessionUnavailable, err)
+		}
+
 		return msg, fmt.Errorf("erro ao enviar mensagem após %d tentativas: %w", maxRetries, err)
 	}
 
+	outages.clear(input.InstanceID)
 	msg.Status = "sent"
 	msg.WhatsAppID = resp.ID
 	if err := s.repo.Update(ctx, msg); err != nil {
