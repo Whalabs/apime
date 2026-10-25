@@ -612,7 +612,10 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		// session, common after re-pairing). The content never arrives; we emit a
 		// marker so the backend records it in the conversation instead of the
 		// inbound silently disappearing. whatsmeow has already requested a resend.
-		if evt.Info.IsFromMe || evt.Info.IsGroup {
+		// Our own view-once, sent from the phone, still has to land in the thread: linked
+		// devices only ever get this stub for it, so dropping it erased the message entirely.
+		isOwnViewOnce := evt.Info.IsFromMe && evt.UnavailableType == events.UnavailableTypeViewOnce
+		if (evt.Info.IsFromMe && !isOwnViewOnce) || evt.Info.IsGroup {
 			result["type"] = "ignore"
 			break
 		}
@@ -626,13 +629,18 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		}
 		result["from"] = senderJID
 
+		// On our own message SenderAlt is OUR number, so the chat's phone comes from RecipientAlt.
+		chatAlt := evt.Info.SenderAlt
+		if isOwnViewOnce {
+			chatAlt = evt.Info.RecipientAlt
+		}
 		chatJID := evt.Info.Chat.String()
-		if strings.Contains(chatJID, "@lid") && !evt.Info.SenderAlt.IsEmpty() && strings.Contains(evt.Info.SenderAlt.String(), "@s.whatsapp.net") {
-			chatJID = evt.Info.SenderAlt.String()
+		if strings.Contains(chatJID, "@lid") && !chatAlt.IsEmpty() && strings.Contains(chatAlt.String(), "@s.whatsapp.net") {
+			chatJID = chatAlt.String()
 		}
 		result["chatJID"] = chatJID
 		result["to"] = chatJID
-		result["isFromMe"] = false
+		result["isFromMe"] = isOwnViewOnce
 		result["isGroup"] = false
 		result["messageId"] = evt.Info.ID
 		result["timestamp"] = evt.Info.Timestamp
@@ -643,6 +651,9 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 		if evt.UnavailableType == events.UnavailableTypeViewOnce {
 			result["unavailableType"] = "view_once"
 			result["text"] = "Mensagem de visualização única, disponível apenas no celular."
+			if isOwnViewOnce {
+				result["text"] = "Você enviou uma mensagem de visualização única, disponível apenas no celular."
+			}
 		} else {
 			result["text"] = "Mensagem indisponível"
 		}
