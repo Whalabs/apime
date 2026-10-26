@@ -215,7 +215,11 @@ func (h *EventHandler) normalizeEvent(ctx context.Context, instanceID string, cl
 			if owner := evt.Info.BroadcastListOwner; !owner.IsEmpty() {
 				result["broadcastListOwner"] = owner.String()
 			}
-			if recipients := broadcastRecipients(evt.Info.BroadcastRecipients); len(recipients) > 0 {
+			source := evt.Info.BroadcastRecipients
+			if len(source) == 0 && evt.Info.IsFromMe && evt.Info.Chat != types.StatusBroadcastJID {
+				source = storedListRecipients(ctx, client, evt.Info.Chat)
+			}
+			if recipients := broadcastRecipients(source, func(lid types.JID) types.JID { return h.resolvePNFromStore(ctx, client, lid) }); len(recipients) > 0 {
 				result["broadcastRecipients"] = recipients
 			}
 		}

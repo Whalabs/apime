@@ -18,7 +18,7 @@ func mustJID(t *testing.T, s string) types.JID {
 func TestBroadcastRecipientsEmitsBothIdentities(t *testing.T) {
 	got := broadcastRecipients([]types.BroadcastRecipient{
 		{PN: mustJID(t, "5511999999999@s.whatsapp.net"), LID: mustJID(t, "123456@lid")},
-	})
+	}, nil)
 	if len(got) != 1 {
 		t.Fatalf("len = %d, want 1", len(got))
 	}
@@ -60,7 +60,7 @@ func TestBroadcastRecipientsPartialAndEmpty(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := broadcastRecipients(tc.recipients)
+			got := broadcastRecipients(tc.recipients, nil)
 			if len(got) != tc.wantLen {
 				t.Fatalf("len = %d, want %d", len(got), tc.wantLen)
 			}
@@ -83,7 +83,7 @@ func TestBroadcastRecipientsKeepsOrder(t *testing.T) {
 		{PN: mustJID(t, "5511111111111@s.whatsapp.net")},
 		{PN: mustJID(t, "5522222222222@s.whatsapp.net")},
 		{PN: mustJID(t, "5533333333333@s.whatsapp.net")},
-	})
+	}, nil)
 	want := []string{
 		"5511111111111@s.whatsapp.net",
 		"5522222222222@s.whatsapp.net",
@@ -93,5 +93,21 @@ func TestBroadcastRecipientsKeepsOrder(t *testing.T) {
 		if got[i]["pn"] != w {
 			t.Errorf("index %d = %q, want %q", i, got[i]["pn"], w)
 		}
+	}
+}
+
+func TestBroadcastRecipientsFillsPNFromLIDMap(t *testing.T) {
+	// Seen on 25/10: a list message sent from a companion echoed with the LID alone, and the consumer,
+	// which knew the contact only by number, opened a nameless duplicate conversation.
+	lid := mustJID(t, "17875972681890@lid")
+	pn := mustJID(t, "554899827309@s.whatsapp.net")
+	got := broadcastRecipients([]types.BroadcastRecipient{{LID: lid}}, func(j types.JID) types.JID {
+		if j == lid {
+			return pn
+		}
+		return types.EmptyJID
+	})
+	if got[0]["pn"] != pn.String() || got[0]["lid"] != lid.String() {
+		t.Fatalf("got %v, want both identities", got[0])
 	}
 }
