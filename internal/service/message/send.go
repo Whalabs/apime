@@ -872,6 +872,11 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			continue
 		}
 
+		// Permanent: the number has no LID, so another attempt only adds discovery traffic.
+		if errors.Is(err, whatsmeow.ErrRecipientNotOnWhatsApp) {
+			break
+		}
+
 		if strings.Contains(err.Error(), "untrusted identity") {
 			s.log.Warn("erro de identidade não confiável detectado, limpando identidade e tentando novamente",
 				zap.String("to", toJID.String()))
@@ -990,6 +995,10 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 
 		if strings.Contains(err.Error(), "device JID") || strings.Contains(err.Error(), "not logged in") {
 			return msg, fmt.Errorf("Desconectado")
+		}
+
+		if errors.Is(err, whatsmeow.ErrRecipientNotOnWhatsApp) {
+			return msg, fmt.Errorf("%w: número não registrado no WhatsApp", ErrInvalidJID)
 		}
 
 		// Reach-out (463)
