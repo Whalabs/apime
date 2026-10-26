@@ -836,7 +836,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 				zap.String("server_id", resp.ID),
 				zap.Int64("timestamp", resp.Timestamp.Unix()))
 			if s.sessionMgr != nil {
-				s.sessionMgr.CacheOutgoingMessage(resp.ID, waMessage)
+				s.sessionMgr.CacheOutgoingMessage(resp.ID, toJID, waMessage)
 			}
 			break
 		}

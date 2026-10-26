@@ -49,7 +49,7 @@ type SessionManager interface {
 	HasSession(instanceID string, jid types.JID) (bool, error)
 	GetPreKeyCount(instanceID string) (int, error)
 	GetConnectedAt(instanceID string) time.Time
-	CacheOutgoingMessage(id string, msg *waE2E.Message)
+	CacheOutgoingMessage(id string, chat types.JID, msg *waE2E.Message)
 }
 
 func NewService(repo storage.MessageRepository, q queue.Queue, cfg config.WhatsAppConfig, log *zap.Logger) *Service {

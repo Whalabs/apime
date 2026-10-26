@@ -13,21 +13,31 @@ import (
 type outgoingMsgEntry struct {
 	msg *waE2E.Message
 	at  time.Time
+	ttl time.Duration
 }
 
 const outgoingMsgCacheTTL = 30 * time.Minute
 
+// statusMsgCacheTTL covers a status's whole life: a viewer whose device could not decrypt it asks
+// for a retry whenever they open it, up to 24h later. Past 30 minutes the retry failed and the
+// viewer was left on "waiting for this message".
+const statusMsgCacheTTL = 24 * time.Hour
+
 // CacheOutgoingMessage stores the raw protobuf of a sent message to allow
 // reconstruction on retry receipts (including media, which cannot be rebuilt from the database).
-func (m *Manager) CacheOutgoingMessage(id string, msg *waE2E.Message) {
+func (m *Manager) CacheOutgoingMessage(id string, chat types.JID, msg *waE2E.Message) {
 	if id == "" || msg == nil {
 		return
 	}
 	now := time.Now()
-	m.outgoingMsgCache.Store(id, outgoingMsgEntry{msg: msg, at: now})
+	ttl := outgoingMsgCacheTTL
+	if chat == types.StatusBroadcastJID {
+		ttl = statusMsgCacheTTL
+	}
+	m.outgoingMsgCache.Store(id, outgoingMsgEntry{msg: msg, at: now, ttl: ttl})
 	// Opportunistic cleanup of expired entries.
 	m.outgoingMsgCache.Range(func(k, v any) bool {
-		if e, ok := v.(outgoingMsgEntry); ok && now.Sub(e.at) > outgoingMsgCacheTTL {
+		if e, ok := v.(outgoingMsgEntry); ok && now.Sub(e.at) > e.ttl {
 			m.outgoingMsgCache.Delete(k)
 		}
 		return true
@@ -43,7 +53,7 @@ func (m *Manager) getMessageForRetryCallback(instanceID string) func(types.JID, 
 
 		// 1. In-memory cache of the raw protobuf — covers any type, including media.
 		if val, ok := m.outgoingMsgCache.Load(id); ok {
-			if entry, ok := val.(outgoingMsgEntry); ok && entry.msg != nil && time.Since(entry.at) <= outgoingMsgCacheTTL {
+			if entry, ok := val.(outgoingMsgEntry); ok && entry.msg != nil && time.Since(entry.at) <= entry.ttl {
 				m.log.Info("mensagem reconstruída para retry via cache de protobuf",
 					zap.String("instance_id", instanceID),
 					zap.String("msg_id", id))
