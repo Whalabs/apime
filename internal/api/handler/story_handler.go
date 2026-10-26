@@ -28,6 +28,7 @@ type sendStoryTextRequest struct {
 	BackgroundArgb uint32 `json:"backgroundArgb"`
 	TextArgb       uint32 `json:"textArgb"`
 	Font           string `json:"font"`
+	WhatsAppID     string `json:"whatsappId"`
 }
 
 // sendStoryText posts a text story. The audience comes from the account's status privacy, readable
@@ -42,7 +43,11 @@ func (h *MessageHandler) sendStoryText(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, err)
 		return
 	}
+	if !validWhatsAppID(c, req.WhatsAppID) {
+		return
+	}
 	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
+		WhatsAppID:     req.WhatsAppID,
 		InstanceID:     instanceID,
 		To:             statusBroadcastJID,
 		Type:           "text",
@@ -87,7 +92,11 @@ func (h *MessageHandler) sendStoryMedia(c *gin.Context) {
 		return
 	}
 
+	if !validWhatsAppID(c, c.PostForm("whatsappId")) {
+		return
+	}
 	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
+		WhatsAppID: c.PostForm("whatsappId"),
 		InstanceID: instanceID,
 		To:         statusBroadcastJID,
 		Type:       mediaType,

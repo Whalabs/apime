@@ -61,6 +61,9 @@ type SendInput struct {
 	Font           string
 	LocationName   string
 	Address        string
+	// WhatsAppID is the caller-chosen WhatsApp message id. Lets the caller match the echo of its
+	// own send by id; empty means the gateway generates one.
+	WhatsAppID string
 }
 
 // ownJIDForChat returns the JID our own messages appear under in that chat, which is what
@@ -121,8 +124,21 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 		return model.Message{}, ErrInvalidPayload
 	}
 
+	if input.WhatsAppID != "" && !ValidWhatsAppID(input.WhatsAppID) {
+		return model.Message{}, ErrInvalidWhatsAppID
+	}
+
 	unlock := instancelock.Acquire(input.InstanceID)
 	defer unlock()
+
+	// A retried request with an id that already went out replays the stored result: sending it
+	// again would make WhatsApp deliver a second copy under the same id.
+	if prev, ok := s.alreadySent(ctx, input); ok {
+		s.log.Info("envio com whatsappId já enviado, devolvendo resultado anterior",
+			zap.String("instance_id", input.InstanceID),
+			zap.String("whatsapp_id", input.WhatsAppID))
+		return prev, nil
+	}
 
 	instance, err := s.instanceRepo.GetByID(ctx, input.InstanceID)
 	if err != nil {
@@ -798,6 +814,10 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 	waitPresence()
 	stopPresence = func() {}
 
+	// One id for every attempt: a retry after a send that did reach WhatsApp must not create a
+	// second message, and the caller matches the echo by this id.
+	sendID := resolveSendID(input.WhatsAppID, client.GenerateMessageID)
+
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			backoff := time.Duration(math.Pow(2, float64(attempt))) * time.Second
@@ -818,7 +838,7 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			}
 		}
 
-		resp, err = client.SendMessage(ctx, toJID, waMessage)
+		resp, err = client.SendMessage(ctx, toJID, waMessage, whatsmeow.SendRequestExtra{ID: sendID})
 		if err == nil {
 			// An empty ID means WhatsApp did not actually accept the message.
 			if resp.ID == "" {

@@ -31,6 +31,7 @@ type MessageRepository interface {
 	Update(ctx context.Context, msg model.Message) error
 	UpdateStatusByWhatsAppID(ctx context.Context, whatsappID string, status string) error
 	GetByWhatsAppID(ctx context.Context, whatsappID string) (model.Message, error)
+	GetByWhatsAppIDForInstance(ctx context.Context, instanceID, whatsappID string) (model.Message, error)
 	GetPendingMessages(ctx context.Context, limit int) ([]model.Message, error)
 	DeleteByInstanceID(ctx context.Context, instanceID string) error
 }

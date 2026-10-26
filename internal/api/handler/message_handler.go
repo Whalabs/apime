@@ -127,6 +127,7 @@ type sendTextRequest struct {
 	MentionedJids     []string `json:"mentionedJids"`
 	MarkReadMessageID string   `json:"markReadMessageId"`
 	MarkReadSender    string   `json:"markReadSender"`
+	WhatsAppID        string   `json:"whatsappId"`
 }
 
 func (h *MessageHandler) sendText(c *gin.Context) {
@@ -147,7 +148,11 @@ func (h *MessageHandler) sendText(c *gin.Context) {
 
 	// Pass the raw JID/phone so the service can resolve it dynamically via IsOnWhatsApp.
 
+	if !validWhatsAppID(c, req.WhatsAppID) {
+		return
+	}
 	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
+		WhatsAppID:        req.WhatsAppID,
 		InstanceID:        instanceID,
 		To:                req.To,
 		Type:              "text",
@@ -224,7 +229,11 @@ func (h *MessageHandler) sendMedia(c *gin.Context) {
 		return
 	}
 
+	if !validWhatsAppID(c, c.PostForm("whatsappId")) {
+		return
+	}
 	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
+		WhatsAppID:        c.PostForm("whatsappId"),
 		InstanceID:        instanceID,
 		To:                to,
 		Type:              mediaType,
@@ -301,7 +310,11 @@ func (h *MessageHandler) sendAudio(c *gin.Context) {
 
 	mediaType := file.Header.Get("Content-Type")
 
+	if !validWhatsAppID(c, c.PostForm("whatsappId")) {
+		return
+	}
 	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
+		WhatsAppID:        c.PostForm("whatsappId"),
 		InstanceID:        instanceID,
 		To:                to,
 		Type:              "audio",
@@ -377,7 +390,11 @@ func (h *MessageHandler) sendDocument(c *gin.Context) {
 		return
 	}
 
+	if !validWhatsAppID(c, c.PostForm("whatsappId")) {
+		return
+	}
 	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
+		WhatsAppID:        c.PostForm("whatsappId"),
 		InstanceID:        instanceID,
 		To:                to,
 		Type:              "document",
@@ -421,6 +438,7 @@ type sendContactRequest struct {
 	QuotedText        string                    `json:"quotedText"`
 	QuotedFromMe      bool                      `json:"quotedFromMe"`
 	MentionedJids     []string                  `json:"mentionedJids"`
+	WhatsAppID        string                    `json:"whatsappId"`
 }
 
 func (h *MessageHandler) sendContact(c *gin.Context) {
@@ -439,7 +457,11 @@ func (h *MessageHandler) sendContact(c *gin.Context) {
 		return
 	}
 
+	if !validWhatsAppID(c, req.WhatsAppID) {
+		return
+	}
 	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
+		WhatsAppID:    req.WhatsAppID,
 		InstanceID:    instanceID,
 		To:            req.To,
 		Type:          "contact",
@@ -483,6 +505,7 @@ type sendLocationRequest struct {
 	QuotedText        string   `json:"quotedText"`
 	QuotedFromMe      bool     `json:"quotedFromMe"`
 	MentionedJids     []string `json:"mentionedJids"`
+	WhatsAppID        string   `json:"whatsappId"`
 }
 
 func (h *MessageHandler) sendLocation(c *gin.Context) {
@@ -501,7 +524,11 @@ func (h *MessageHandler) sendLocation(c *gin.Context) {
 		return
 	}
 
+	if !validWhatsAppID(c, req.WhatsAppID) {
+		return
+	}
 	msg, err := h.service.Send(c.Request.Context(), messageSvc.SendInput{
+		WhatsAppID:    req.WhatsAppID,
 		InstanceID:    instanceID,
 		To:            req.To,
 		Type:          "location",
@@ -551,4 +578,14 @@ func (h *MessageHandler) list(c *gin.Context) {
 		return
 	}
 	response.Success(c, http.StatusOK, list)
+}
+
+// validWhatsAppID answers 400 for a malformed caller id before anything is sent; empty is valid
+// and means the gateway picks the id.
+func validWhatsAppID(c *gin.Context, id string) bool {
+	if id == "" || messageSvc.ValidWhatsAppID(id) {
+		return true
+	}
+	response.Error(c, http.StatusBadRequest, messageSvc.ErrInvalidWhatsAppID)
+	return false
 }

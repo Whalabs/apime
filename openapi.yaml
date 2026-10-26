@@ -268,6 +268,8 @@ paths:
               type: object
               required: [to, text]
               properties:
+                whatsappId:
+                  $ref: "#/components/schemas/WhatsAppMessageId"
                 to:
                   type: string
                   example: "5511999999999"
@@ -302,6 +304,8 @@ paths:
               type: object
               required: [to, type, file]
               properties:
+                whatsappId:
+                  $ref: "#/components/schemas/WhatsAppMessageId"
                 to:
                   type: string
                   description: JID do destinatário
@@ -354,6 +358,8 @@ paths:
               type: object
               required: [to, file]
               properties:
+                whatsappId:
+                  $ref: "#/components/schemas/WhatsAppMessageId"
                 to:
                   type: string
                   description: JID do destinatário
@@ -398,6 +404,8 @@ paths:
               type: object
               required: [to, file]
               properties:
+                whatsappId:
+                  $ref: "#/components/schemas/WhatsAppMessageId"
                 to:
                   type: string
                   description: JID do destinatário
@@ -599,6 +607,8 @@ paths:
               type: object
               required: [to, displayName]
               properties:
+                whatsappId:
+                  $ref: "#/components/schemas/WhatsAppMessageId"
                 to:
                   type: string
                 displayName:
@@ -644,6 +654,8 @@ paths:
               type: object
               required: [to, latitude, longitude]
               properties:
+                whatsappId:
+                  $ref: "#/components/schemas/WhatsAppMessageId"
                 to:
                   type: string
                 latitude:
@@ -1725,6 +1737,8 @@ paths:
               type: object
               required: [text]
               properties:
+                whatsappId:
+                  $ref: "#/components/schemas/WhatsAppMessageId"
                 text:
                   type: string
                 backgroundArgb:
@@ -1774,6 +1788,8 @@ paths:
               type: object
               required: [type, file]
               properties:
+                whatsappId:
+                  $ref: "#/components/schemas/WhatsAppMessageId"
                 type:
                   type: string
                   enum: [image, video]
@@ -1860,6 +1876,18 @@ components:
       description: callId recebido no webhook call.offer ou no retorno de POST /calls
 
   schemas:
+    WhatsAppMessageId:
+      type: string
+      pattern: "^[0-9A-F]{16,32}$"
+      example: "3EB0A1B2C3D4E5F6071829"
+      description: >-
+        ID da mensagem no WhatsApp escolhido por quem envia (opcional). Use hexadecimal maiúsculo
+        com 16 a 32 caracteres, como "3EB0" seguido de 18 caracteres hexadecimais. Fora do formato, a resposta é 400.
+        Sem ele, o gateway gera um ID e o mantém em todas as retentativas. O mesmo ID volta em
+        `whatsappId` na resposta e no eco do envio, o que permite reconhecer a própria mensagem
+        pelo ID. Reenviar um ID que esta instância já enviou com sucesso devolve o resultado
+        anterior, sem enviar de novo, mesmo que o destinatário ou o conteúdo sejam outros: use um
+        ID novo para cada mensagem.
     Call:
       type: object
       properties:

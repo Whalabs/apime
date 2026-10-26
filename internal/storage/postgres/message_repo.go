@@ -136,17 +136,31 @@ func (r *messageRepo) UpdateStatusByWhatsAppID(ctx context.Context, whatsappID s
 }
 
 func (r *messageRepo) GetByWhatsAppID(ctx context.Context, whatsappID string) (model.Message, error) {
-	query := `
+	return r.getOne(ctx, `
 		SELECT id, instance_id, whatsapp_id, recipient, type, payload, status, delivered_at, created_at
 		FROM message_queue
 		WHERE whatsapp_id = $1
 		LIMIT 1
-	`
+	`, whatsappID)
+}
+
+// GetByWhatsAppIDForInstance finds a send of this instance that went out under whatsappID. Rows still
+// queued, sending or failed are skipped: only a send WhatsApp accepted may be replayed.
+func (r *messageRepo) GetByWhatsAppIDForInstance(ctx context.Context, instanceID, whatsappID string) (model.Message, error) {
+	return r.getOne(ctx, `
+		SELECT id, instance_id, whatsapp_id, recipient, type, payload, status, delivered_at, created_at
+		FROM message_queue
+		WHERE whatsapp_id = $1 AND instance_id = $2 AND status NOT IN ('queued', 'sending', 'failed')
+		LIMIT 1
+	`, whatsappID, instanceID)
+}
+
+func (r *messageRepo) getOne(ctx context.Context, query string, args ...any) (model.Message, error) {
 
 	var msg model.Message
 	var payloadBytes []byte
 	var wID *string
-	err := r.db.Pool.QueryRow(ctx, query, whatsappID).Scan(
+	err := r.db.Pool.QueryRow(ctx, query, args...).Scan(
 		&msg.ID, &msg.InstanceID, &wID, &msg.To, &msg.Type, &payloadBytes, &msg.Status, &msg.DeliveredAt, &msg.CreatedAt,
 	)
 

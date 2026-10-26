@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -59,5 +62,26 @@ func TestMediaAllowlistCoversTheDocumentedTypes(t *testing.T) {
 		if allowedMediaTypes[refused] {
 			t.Fatalf("tipo %q não deveria ser aceito", refused)
 		}
+	}
+}
+
+// A malformed caller id is answered with 400 before the service is reached (the service is nil here).
+func TestSendTextRejectsMalformedWhatsAppID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("authType", "instance_token")
+		c.Set("instanceID", "inst-a")
+	})
+	NewMessageHandler(nil, nil).Register(r.Group("/api"))
+
+	body := `{"to":"5511999999999","text":"oi","whatsappId":"3eb0-not-hex"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/instances/inst-a/messages/text", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status %d, body %s", w.Code, w.Body.String())
 	}
 }
