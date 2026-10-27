@@ -531,13 +531,14 @@ func (s *Service) Send(ctx context.Context, input SendInput) (model.Message, err
 			}
 		} else {
 			videoMsg := &waE2E.VideoMessage{
-				URL:           &uploadResp.URL,
-				DirectPath:    &uploadResp.DirectPath,
-				MediaKey:      uploadResp.MediaKey,
-				FileEncSHA256: uploadResp.FileEncSHA256,
-				FileSHA256:    uploadResp.FileSHA256,
-				FileLength:    &uploadResp.FileLength,
-				Mimetype:      proto.String(input.MediaType),
+				URL:              &uploadResp.URL,
+				DirectPath:       &uploadResp.DirectPath,
+				MediaKey:         uploadResp.MediaKey,
+				FileEncSHA256:    uploadResp.FileEncSHA256,
+				FileSHA256:       uploadResp.FileSHA256,
+				FileLength:       &uploadResp.FileLength,
+				Mimetype:         proto.String(input.MediaType),
+				StreamingSidecar: uploadResp.StreamingSidecar,
 			}
 			if input.Caption != "" {
 				videoMsg.Caption = proto.String(input.Caption)
