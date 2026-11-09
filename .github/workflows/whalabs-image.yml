@@ -1,0 +1,45 @@
+# Whalabs fork only: every push or sync to main publishes a ready image, so the servers pull it
+# instead of compiling Go on a 1 CPU Linode. Lives in its own file so syncing upstream never conflicts.
+name: whalabs-image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: whalabs-image
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    if: github.repository == 'Whalabs/apime'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Short commit
+        id: meta
+        run: echo "sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/whalabs/apime:${{ steps.meta.outputs.sha }}
+            ghcr.io/whalabs/apime:latest
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/Whalabs/apime
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
